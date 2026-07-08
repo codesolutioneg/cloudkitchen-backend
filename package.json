@@ -20,6 +20,7 @@
     "db:migrate:deploy": "prisma migrate deploy",
     "db:studio": "prisma studio",
     "db:seed": "tsx prisma/seed.ts",
+    "seed:demo": "tsx scripts/seed-realistic-demo.ts",
     "import:dishflow": "tsx scripts/import-dishflow-catalog.ts",
     "test": "vitest run",
     "test:watch": "vitest",
