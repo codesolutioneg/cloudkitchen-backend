@@ -1,0 +1,10 @@
+node_modules/
+dist/
+coverage/
+.env
+.env.local
+uploads/
+*-firebase-adminsdk*.json
+cloud-kitchen-*.json
+*.log
+.DS_Store

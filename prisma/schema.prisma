@@ -1,0 +1,2003 @@
+// ============================================================================
+// Cloud Kitchen B2B Platform — Prisma Schema
+// PostgreSQL 15+ | Node.js/TypeScript backend
+//
+// This file is the compiled, authoritative implementation of
+// `cloud-kitchen-b2b-schema.md` (§1–§29) WITH the §30 errata pass already
+// applied (polymorphic actor columns, deprecated-table removal, narrowed
+// enums). If this file and the markdown ever disagree, this file wins for
+// "what to build" — the markdown wins for "why it's shaped this way."
+//
+// Conventions used throughout:
+//   - UUID primary keys via Postgres-native gen_random_uuid() (PG13+ built-in).
+//   - snake_case column/table names (via @map/@@map) so the physical schema
+//     matches cloud-kitchen-b2b-schema.md exactly; PascalCase Prisma model
+//     names for idiomatic TypeScript client usage.
+//   - Every "lookup instead of enum" concept (statuses, rule types, roles,
+//     event codes, etc.) is a plain `String` column, NEVER a Prisma/Postgres
+//     enum — only the 4 tables in §13 use real enums.
+//   - Polymorphic pairs (`entity_type`+`entity_id`, `*_type`+`*_id` actor
+//     references) are plain scalar columns with NO relation/FK, resolved in
+//     the application layer — exactly mirroring the markdown's own stated
+//     design principle (never block deletion/evolution of the referenced
+//     table). Do not "helpfully" add a relation to these.
+//   - Money: Decimal with explicit scale. Timestamps: timestamptz(6).
+//   - High-volume append-only tables get a standard btree index here on the
+//     timestamp column; convert to `USING BRIN` via a follow-up raw-SQL
+//     migration at production scale (§15/§30) — Prisma's schema language
+//     does not need to express the index *type* for functional correctness.
+// ============================================================================
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ============================================================================
+// §13 — The only 4 true PostgreSQL enums (everything else is a lookup table)
+// ============================================================================
+
+enum CompanyStatus {
+  pending
+  active
+  suspended
+  blocked
+  closed
+
+  @@map("company_status")
+}
+
+enum ApprovalStatus {
+  pending
+  under_review
+  approved
+  rejected
+  resubmission_required
+
+  @@map("approval_status")
+}
+
+enum DocumentVerificationStatus {
+  pending
+  verified
+  rejected
+
+  @@map("document_verification_status")
+}
+
+enum FulfillmentType {
+  delivery
+  pickup
+
+  @@map("fulfillment_type")
+}
+
+// ============================================================================
+// §1 — MODULE: Companies & Onboarding
+// ============================================================================
+
+model Company {
+  id                         String         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  legal_name                 String         @db.VarChar(255)
+  trade_name                 String?        @db.VarChar(255)
+  commercial_registration_no String?        @unique @db.VarChar(100)
+  tax_registration_no        String?        @unique @db.VarChar(100)
+  national_address_no        String?        @db.VarChar(100)
+  industry_sector            String?        @db.VarChar(150)
+  company_size               String?        @db.VarChar(50)
+  country_code               String         @db.Char(2)
+  city                       String?        @db.VarChar(100)
+  primary_contact_name       String?        @db.VarChar(150)
+  primary_contact_title      String?        @db.VarChar(100)
+  primary_email              String         @db.VarChar(255)
+  primary_phone              String         @db.VarChar(30)
+  secondary_phone            String?        @db.VarChar(30)
+  website                    String?        @db.VarChar(255)
+  default_currency           String         @db.Char(3)
+  default_timezone           String         @db.VarChar(64)
+  default_language_code      String?        @db.VarChar(10)
+  status                     CompanyStatus  @default(pending)
+  approval_status            ApprovalStatus @default(pending)
+  approval_notes             String?
+  approved_by                String?        @db.Uuid
+  approved_at                DateTime?      @db.Timestamptz(6)
+  onboarding_source          String?        @db.VarChar(50) // self_signup | sales_lead | admin_created
+  parent_company_id          String?        @db.Uuid
+
+  created_at      DateTime  @default(now()) @db.Timestamptz(6)
+  updated_at      DateTime  @updatedAt @db.Timestamptz(6)
+  deleted_at      DateTime? @db.Timestamptz(6)
+  created_by_type String?   @db.VarChar(20)
+  created_by_id   String?   @db.Uuid
+  updated_by_type String?   @db.VarChar(20)
+  updated_by_id   String?   @db.Uuid
+  is_deleted      Boolean   @default(false)
+  version         Int       @default(1)
+
+  approved_by_user         DashboardUser?                   @relation("CompanyApprovedBy", fields: [approved_by], references: [id], onDelete: SetNull)
+  default_language         Language?                        @relation(fields: [default_language_code], references: [code], onDelete: SetNull)
+  parent_company           Company?                         @relation("CompanyParent", fields: [parent_company_id], references: [id], onDelete: SetNull)
+  child_companies          Company[]                        @relation("CompanyParent")
+  addresses                CompanyAddress[]
+  approval_history         CompanyApprovalHistory[]
+  departments              Department[]
+  company_users            CompanyUser[]
+  company_features         CompanyFeature[]
+  company_modules          CompanyModule[]
+  company_configurations   CompanyConfiguration[]
+  orders                   Order[]
+  workflows                Workflow[]
+  approval_workflows       ApprovalWorkflow[]
+  calendars                Calendar[]
+  pricing_list_assignments CompanyPricingListAssignment[]
+  dashboard_assignments    DashboardUserCompanyAssignment[]
+  company_roles            CompanyRole[]
+
+  @@index([status])
+  @@index([approval_status])
+  @@map("companies")
+}
+
+model CompanyAddress {
+  id             String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  company_id     String   @db.Uuid
+  address_type   String   @db.VarChar(20) // billing | delivery
+  label          String?  @db.VarChar(100)
+  address_line1  String?  @db.VarChar(255)
+  address_line2  String?  @db.VarChar(255)
+  city           String?  @db.VarChar(100)
+  state_province String?  @db.VarChar(100)
+  country_code   String?  @db.VarChar(2)
+  postal_code    String?  @db.VarChar(20)
+  latitude       Decimal? @db.Decimal(9, 6)
+  longitude      Decimal? @db.Decimal(9, 6)
+  contact_name   String?  @db.VarChar(150)
+  contact_phone  String?  @db.VarChar(30)
+  is_default     Boolean  @default(false)
+
+  created_at      DateTime  @default(now()) @db.Timestamptz(6)
+  updated_at      DateTime  @updatedAt @db.Timestamptz(6)
+  deleted_at      DateTime? @db.Timestamptz(6)
+  created_by_type String?   @db.VarChar(20)
+  created_by_id   String?   @db.Uuid
+  updated_by_type String?   @db.VarChar(20)
+  updated_by_id   String?   @db.Uuid
+  is_deleted      Boolean   @default(false)
+  version         Int       @default(1)
+
+  company         Company @relation(fields: [company_id], references: [id], onDelete: Cascade)
+  orders_delivery Order[] @relation("OrderDeliveryAddress")
+
+  @@index([company_id])
+  @@map("company_addresses")
+}
+
+/// Append-only (§1.4). No update/delete from application code.
+model CompanyApprovalHistory {
+  id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  company_id  String   @db.Uuid
+  from_status String?  @db.VarChar(30)
+  to_status   String   @db.VarChar(30)
+  actor_id    String?  @db.Uuid // FK -> dashboard_users (§30.2 — single-type, only staff decide)
+  reason      String?
+  created_at  DateTime @default(now()) @db.Timestamptz(6)
+
+  company Company        @relation(fields: [company_id], references: [id], onDelete: Cascade)
+  actor   DashboardUser? @relation(fields: [actor_id], references: [id], onDelete: SetNull)
+
+  @@index([company_id])
+  @@map("company_approval_history")
+}
+
+// ============================================================================
+// §2 / §23 — MODULE: Users, Roles & Company Structure (final, post-split model)
+// ============================================================================
+
+/// §23.2 — thin, no role/permission relation of any kind.
+model CompanyUser {
+  id                      String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  company_id              String    @db.Uuid
+  department_id           String?   @db.Uuid
+  full_name               String    @db.VarChar(150)
+  email                   String    @unique @db.VarChar(255) // normalize to lowercase at the application layer
+  mobile                  String?   @unique @db.VarChar(30)
+  password_hash           String
+  password_algo           String    @default("bcrypt") @db.VarChar(20)
+  status                  String    @default("invited") @db.VarChar(20) // active | inactive | locked | invited
+  is_primary_contact      Boolean   @default(false)
+  mfa_enabled             Boolean   @default(false)
+  last_login_at           DateTime? @db.Timestamptz(6)
+  preferred_language_code String?   @db.VarChar(10)
+
+  created_at      DateTime  @default(now()) @db.Timestamptz(6)
+  updated_at      DateTime  @updatedAt @db.Timestamptz(6)
+  deleted_at      DateTime? @db.Timestamptz(6)
+  created_by_type String?   @db.VarChar(20)
+  created_by_id   String?   @db.Uuid
+  updated_by_type String?   @db.VarChar(20)
+  updated_by_id   String?   @db.Uuid
+  is_deleted      Boolean   @default(false)
+  version         Int       @default(1)
+
+  company            Company                         @relation(fields: [company_id], references: [id], onDelete: Cascade)
+  department         Department?                     @relation(fields: [department_id], references: [id], onDelete: SetNull)
+  preferred_language Language?                       @relation(fields: [preferred_language_code], references: [code], onDelete: SetNull)
+  orders_placed      Order[]                         @relation("OrderPlacedBy")
+  sessions           CompanyUserSession[]
+  refresh_tokens     CompanyUserRefreshToken[]
+  login_history      CompanyUserLoginHistory[]
+  password_resets    CompanyUserPasswordResetToken[]
+  otp_codes          CompanyUserOtpCode[]
+  company_user_roles CompanyUserRole[]
+
+  @@index([company_id])
+  @@map("company_users")
+}
+
+/// §23.2 — full RBAC applies exclusively here.
+model DashboardUser {
+  id            String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  full_name     String    @db.VarChar(150)
+  email         String    @unique @db.VarChar(255)
+  password_hash String
+  password_algo String    @default("bcrypt") @db.VarChar(20)
+  status        String    @default("invited") @db.VarChar(20) // active | inactive | locked | invited
+  department    String?   @db.VarChar(100) // free text/org label, NOT the same thing as `roles`
+  mfa_enabled   Boolean   @default(false)
+  last_login_at DateTime? @db.Timestamptz(6)
+
+  created_at      DateTime  @default(now()) @db.Timestamptz(6)
+  updated_at      DateTime  @updatedAt @db.Timestamptz(6)
+  deleted_at      DateTime? @db.Timestamptz(6)
+  created_by_type String?   @db.VarChar(20)
+  created_by_id   String?   @db.Uuid
+  updated_by_type String?   @db.VarChar(20)
+  updated_by_id   String?   @db.Uuid
+  is_deleted      Boolean   @default(false)
+  version         Int       @default(1)
+
+  roles                               DashboardUserRole[]               @relation("DashboardUserRoleUser")
+  roles_assigned                      DashboardUserRole[]               @relation("DashboardUserRoleAssignedBy")
+  company_approvals_decided           CompanyApprovalHistory[]
+  companies_approved                  Company[]                         @relation("CompanyApprovedBy")
+  company_scope                       DashboardUserCompanyScope?        @relation("ScopeUser")
+  scopes_updated                      DashboardUserCompanyScope[]       @relation("ScopeUpdatedBy")
+  company_assignments                 DashboardUserCompanyAssignment[]  @relation("AssignmentUser")
+  company_assignments_made            DashboardUserCompanyAssignment[]  @relation("AssignmentAssignedBy")
+  branch_assignments                  DashboardUserBranchAssignment[]
+  sessions                            DashboardUserSession[]
+  refresh_tokens                      DashboardUserRefreshToken[]
+  login_history                       DashboardUserLoginHistory[]
+  password_resets                     DashboardUserPasswordResetToken[]
+  otp_codes                           DashboardUserOtpCode[]
+  files_verified                      FileAttachment[]
+  global_settings_updated             GlobalSetting[]
+  global_settings_history_entries     GlobalSettingHistory[]
+  company_user_roles_assigned         CompanyUserRole[]
+  permission_overrides                PermissionOverride[]
+  policies_targeted                   Policy[]
+  delivery_assignments                OrderDeliveryDetails[]            @relation("DeliveryAssignedUser")
+  delivery_assignments_made           OrderDeliveryDetails[]            @relation("DeliveryAssignedBy")
+  approval_workflow_steps_as_approver ApprovalWorkflowStep[]
+
+  @@map("dashboard_users")
+}
+
+model Department {
+  id                   String  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  company_id           String  @db.Uuid
+  name                 String  @db.VarChar(150)
+  cost_center_code     String? @db.VarChar(50)
+  parent_department_id String? @db.Uuid
+
+  created_at      DateTime  @default(now()) @db.Timestamptz(6)
+  updated_at      DateTime  @updatedAt @db.Timestamptz(6)
+  deleted_at      DateTime? @db.Timestamptz(6)
+  created_by_type String?   @db.VarChar(20)
+  created_by_id   String?   @db.Uuid
+  updated_by_type String?   @db.VarChar(20)
+  updated_by_id   String?   @db.Uuid
+  is_deleted      Boolean   @default(false)
+  version         Int       @default(1)
+
+  company           Company       @relation(fields: [company_id], references: [id], onDelete: Cascade)
+  parent_department Department?   @relation("DepartmentParent", fields: [parent_department_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  child_departments Department[]  @relation("DepartmentParent")
+  company_users     CompanyUser[]
+  orders            Order[]
+
+  @@index([company_id])
+  @@map("departments")
+}
+
+/// §23.3 — always platform-scoped now (`company_id` column removed).
+model Role {
+  id             String  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name           String  @db.VarChar(100)
+  scope          String  @default("platform") @db.VarChar(20)
+  is_system_role Boolean @default(false)
+  description    String?
+
+  created_at      DateTime  @default(now()) @db.Timestamptz(6)
+  updated_at      DateTime  @updatedAt @db.Timestamptz(6)
+  deleted_at      DateTime? @db.Timestamptz(6)
+  created_by_type String?   @db.VarChar(20)
+  created_by_id   String?   @db.Uuid
+  updated_by_type String?   @db.VarChar(20)
+  updated_by_id   String?   @db.Uuid
+  is_deleted      Boolean   @default(false)
+  version         Int       @default(1)
+
+  role_permissions        RolePermission[]
+  dashboard_user_roles    DashboardUserRole[]
+  parent_of               RoleInheritance[]      @relation("ParentRole")
+  child_of                RoleInheritance[]      @relation("ChildRole")
+  permission_overrides    PermissionOverride[]   @relation("RoleOverrideNA") // reserved, unused post-§30.3 (kept for symmetry, see note on PermissionOverride)
+  policies                Policy[]
+  page_permissions        RolePagePermission[]
+  dashboard_role_modules  DashboardRoleModule[]
+  dashboard_role_features DashboardRoleFeature[]
+  approval_workflow_steps ApprovalWorkflowStep[]
+
+  @@unique([name])
+  @@map("roles")
+}
+
+model Permission {
+  id                  String  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  code                String  @unique @db.VarChar(150)
+  name                String  @db.VarChar(150)
+  permission_group_id String? @db.Uuid
+  description         String?
+
+  permission_group               PermissionGroup?     @relation(fields: [permission_group_id], references: [id], onDelete: SetNull)
+  role_permissions               RolePermission[]
+  permission_overrides           PermissionOverride[]
+  features_requiring             Feature[]
+  workflow_transitions_requiring WorkflowTransition[]
+
+  @@map("permissions")
+}
+
+model PermissionGroup {
+  id         String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name       String @db.VarChar(100)
+  sort_order Int    @default(0)
+
+  permissions Permission[]
+
+  @@map("permission_groups")
+}
+
+model RolePermission {
+  role_id       String @db.Uuid
+  permission_id String @db.Uuid
+  effect        String @default("allow") @db.VarChar(10) // allow | deny
+
+  role       Role       @relation(fields: [role_id], references: [id], onDelete: Cascade)
+  permission Permission @relation(fields: [permission_id], references: [id], onDelete: Cascade)
+
+  @@id([role_id, permission_id])
+  @@map("role_permissions")
+}
+
+/// §23.2 — replaces the deprecated `user_roles`.
+model DashboardUserRole {
+  dashboard_user_id String   @db.Uuid
+  role_id           String   @db.Uuid
+  assigned_by       String?  @db.Uuid
+  assigned_at       DateTime @default(now()) @db.Timestamptz(6)
+
+  dashboard_user   DashboardUser  @relation("DashboardUserRoleUser", fields: [dashboard_user_id], references: [id], onDelete: Cascade)
+  role             Role           @relation(fields: [role_id], references: [id], onDelete: Cascade)
+  assigned_by_user DashboardUser? @relation("DashboardUserRoleAssignedBy", fields: [assigned_by], references: [id], onDelete: SetNull)
+
+  @@id([dashboard_user_id, role_id])
+  @@map("dashboard_user_roles")
+}
+
+model RoleInheritance {
+  parent_role_id String @db.Uuid
+  child_role_id  String @db.Uuid
+
+  parent_role Role @relation("ParentRole", fields: [parent_role_id], references: [id], onDelete: Cascade)
+  child_role  Role @relation("ChildRole", fields: [child_role_id], references: [id], onDelete: Cascade)
+
+  @@id([parent_role_id, child_role_id])
+  @@map("role_inheritance")
+}
+
+/// §2.9 corrected per §30.3 — scope_type is `dashboard_user` ONLY (company option removed).
+model PermissionOverride {
+  id            String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  scope_type    String    @default("dashboard_user") @db.VarChar(20)
+  scope_id      String    @db.Uuid // -> dashboard_users.id
+  permission_id String    @db.Uuid
+  effect        String    @db.VarChar(10) // allow | deny
+  reason        String?
+  expires_at    DateTime? @db.Timestamptz(6)
+
+  created_at DateTime @default(now()) @db.Timestamptz(6)
+  updated_at DateTime @updatedAt @db.Timestamptz(6)
+
+  permission     Permission    @relation(fields: [permission_id], references: [id], onDelete: Cascade)
+  dashboard_user DashboardUser @relation(fields: [scope_id], references: [id], onDelete: Cascade, map: "permission_overrides_scope_dashboard_user_fkey")
+  role_unused_na Role?         @relation("RoleOverrideNA", fields: [role_unused_id], references: [id], onDelete: NoAction) // never populated; see note below
+  role_unused_id String?       @db.Uuid
+
+  @@index([scope_type, scope_id])
+  @@map("permission_overrides")
+}
+
+/// §2.10 corrected per §30.3 — applies_to is `role` | `dashboard_user` ONLY (company option removed).
+model Policy {
+  id         String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name       String @db.VarChar(150)
+  effect     String @db.VarChar(10) // allow | deny
+  conditions Json
+  applies_to String @db.VarChar(20) // role | dashboard_user
+  target_id  String @db.Uuid
+  priority   Int    @default(0)
+
+  created_at DateTime @default(now()) @db.Timestamptz(6)
+  updated_at DateTime @updatedAt @db.Timestamptz(6)
+
+  role_target           Role?          @relation(fields: [target_id], references: [id], onDelete: Cascade, map: "policies_target_role_fkey")
+  dashboard_user_target DashboardUser? @relation(fields: [target_id], references: [id], onDelete: Cascade, map: "policies_target_dashboard_user_fkey")
+
+  @@index([applies_to, target_id])
+  @@map("policies")
+}
+
+/// §29.2 — explicit scope declaration, one row per dashboard user.
+model DashboardUserCompanyScope {
+  dashboard_user_id String   @id @db.Uuid
+  scope_type        String   @default("specific") @db.VarChar(20) // all | specific
+  updated_by        String?  @db.Uuid
+  updated_at        DateTime @updatedAt @db.Timestamptz(6)
+
+  dashboard_user  DashboardUser  @relation("ScopeUser", fields: [dashboard_user_id], references: [id], onDelete: Cascade)
+  updated_by_user DashboardUser? @relation("ScopeUpdatedBy", fields: [updated_by], references: [id], onDelete: SetNull)
+
+  @@map("dashboard_user_company_scope")
+}
+
+/// §23.3 / §29.2 — meaningful only when the user's scope is `specific`.
+model DashboardUserCompanyAssignment {
+  dashboard_user_id String   @db.Uuid
+  company_id        String   @db.Uuid
+  assigned_by       String?  @db.Uuid
+  assigned_at       DateTime @default(now()) @db.Timestamptz(6)
+
+  dashboard_user   DashboardUser  @relation("AssignmentUser", fields: [dashboard_user_id], references: [id], onDelete: Cascade)
+  company          Company        @relation(fields: [company_id], references: [id], onDelete: Cascade)
+  assigned_by_user DashboardUser? @relation("AssignmentAssignedBy", fields: [assigned_by], references: [id], onDelete: SetNull)
+
+  @@id([dashboard_user_id, company_id])
+  @@map("dashboard_user_company_assignments")
+}
+
+/// §23.3 — reserved for a future `branches` entity; `branch_id` deliberately has no FK yet.
+model DashboardUserBranchAssignment {
+  dashboard_user_id String   @db.Uuid
+  branch_id         String   @db.Uuid
+  assigned_at       DateTime @default(now()) @db.Timestamptz(6)
+
+  dashboard_user DashboardUser @relation(fields: [dashboard_user_id], references: [id], onDelete: Cascade)
+
+  @@id([dashboard_user_id, branch_id])
+  @@map("dashboard_user_branch_assignments")
+}
+
+// ============================================================================
+// §2A — MODULE: Feature Management System
+// ============================================================================
+
+model Feature {
+  id                        String  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  code                      String  @unique @db.VarChar(100)
+  name                      String  @db.VarChar(150)
+  feature_group_id          String? @db.Uuid
+  module_id                 String? @db.Uuid // §20.2
+  description               String?
+  is_global_default_enabled Boolean @default(false)
+  requires_permission_id    String? @db.Uuid
+
+  feature_group           FeatureGroup?          @relation(fields: [feature_group_id], references: [id], onDelete: SetNull)
+  module                  Module?                @relation(fields: [module_id], references: [id], onDelete: SetNull)
+  requires_permission     Permission?            @relation(fields: [requires_permission_id], references: [id], onDelete: SetNull)
+  company_features        CompanyFeature[]
+  dashboard_role_features DashboardRoleFeature[]
+  dashboard_pages         DashboardPage[]
+
+  @@map("features")
+}
+
+model FeatureGroup {
+  id         String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name       String @db.VarChar(100)
+  sort_order Int    @default(0)
+
+  features Feature[]
+
+  @@map("feature_groups")
+}
+
+model CompanyFeature {
+  id            String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  company_id    String    @db.Uuid
+  feature_id    String    @db.Uuid
+  is_enabled    Boolean   @default(false)
+  enabled_from  DateTime? @db.Timestamptz(6)
+  enabled_until DateTime? @db.Timestamptz(6)
+  config        Json?
+
+  company Company @relation(fields: [company_id], references: [id], onDelete: Cascade)
+  feature Feature @relation(fields: [feature_id], references: [id], onDelete: Cascade)
+
+  @@unique([company_id, feature_id])
+  @@map("company_features")
+}
+
+model FeatureFlag {
+  id                  String  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  key                 String  @unique @db.VarChar(150)
+  description         String?
+  is_enabled_globally Boolean @default(false)
+  rollout_percentage  Int     @default(0)
+  environment         String  @default("all") @db.VarChar(20) // production | staging | all
+  targeting_rules     Json?
+
+  @@map("feature_flags")
+}
+
+/// §2A.5 corrected per §30.4 — target_type no longer includes `navigation_item`.
+model VisibilityRule {
+  id               String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  target_type      String    @db.VarChar(30) // feature | menu | product
+  target_id        String    @db.Uuid
+  scope_type       String    @db.VarChar(20) // company | role | user | department
+  scope_id         String    @db.Uuid
+  scope_actor_type String?   @db.VarChar(20) // company_user | dashboard_user — required when scope_type = 'user'
+  is_visible       Boolean   @default(true)
+  effective_from   DateTime? @db.Timestamptz(6)
+  effective_to     DateTime? @db.Timestamptz(6)
+
+  @@index([target_type, target_id])
+  @@index([scope_type, scope_id])
+  @@map("visibility_rules")
+}
+
+// ============================================================================
+// §20 — MODULE: Enterprise Feature Flags — Module-Level
+// ============================================================================
+
+model Module {
+  id          String  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  code        String  @unique @db.VarChar(100)
+  name        String  @db.VarChar(150)
+  description String?
+  is_core     Boolean @default(false)
+  sort_order  Int     @default(0)
+  audience    String  @db.VarChar(20) // dashboard | company (§23.6)
+
+  features               Feature[]
+  company_modules        CompanyModule[]
+  dashboard_role_modules DashboardRoleModule[]
+  dashboard_pages        DashboardPage[]
+
+  @@map("modules")
+}
+
+model CompanyModule {
+  id            String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  company_id    String    @db.Uuid
+  module_id     String    @db.Uuid
+  is_enabled    Boolean   @default(false)
+  enabled_from  DateTime? @db.Timestamptz(6)
+  enabled_until DateTime? @db.Timestamptz(6)
+
+  company Company @relation(fields: [company_id], references: [id], onDelete: Cascade)
+  module  Module  @relation(fields: [module_id], references: [id], onDelete: Cascade)
+
+  @@unique([company_id, module_id])
+  @@map("company_modules")
+}
+
+/// §23.6 — dashboard-audience module gate, scoped by role instead of company.
+model DashboardRoleModule {
+  role_id    String  @db.Uuid
+  module_id  String  @db.Uuid
+  is_enabled Boolean @default(false)
+
+  role   Role   @relation(fields: [role_id], references: [id], onDelete: Cascade)
+  module Module @relation(fields: [module_id], references: [id], onDelete: Cascade)
+
+  @@id([role_id, module_id])
+  @@map("dashboard_role_modules")
+}
+
+/// §23.6 — dashboard-audience feature gate, scoped by role instead of company.
+model DashboardRoleFeature {
+  role_id    String  @db.Uuid
+  feature_id String  @db.Uuid
+  is_enabled Boolean @default(false)
+
+  role    Role    @relation(fields: [role_id], references: [id], onDelete: Cascade)
+  feature Feature @relation(fields: [feature_id], references: [id], onDelete: Cascade)
+
+  @@id([role_id, feature_id])
+  @@map("dashboard_role_features")
+}
+
+// ============================================================================
+// §23.4 — MODULE: Dashboard Pages (canonical dynamic-dashboard model;
+// supersedes historical §2B/§21 navigation_menus/pages/routes/menu_groups/
+// navigation_assignments — those are intentionally NOT implemented, §30.5)
+// ============================================================================
+
+model DashboardPage {
+  id         String  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name       String  @db.VarChar(150)
+  route      String  @db.VarChar(255)
+  icon       String? @db.VarChar(100)
+  parent_id  String? @db.Uuid
+  sort_order Int     @default(0)
+  module_id  String? @db.Uuid
+  feature_id String? @db.Uuid
+  is_visible Boolean @default(true)
+  is_enabled Boolean @default(true)
+
+  parent           DashboardPage?       @relation("DashboardPageParent", fields: [parent_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  children         DashboardPage[]      @relation("DashboardPageParent")
+  module           Module?              @relation(fields: [module_id], references: [id], onDelete: SetNull)
+  feature          Feature?             @relation(fields: [feature_id], references: [id], onDelete: SetNull)
+  role_permissions RolePagePermission[]
+
+  @@map("dashboard_pages")
+}
+
+model RolePagePermission {
+  role_id     String  @db.Uuid
+  page_id     String  @db.Uuid
+  can_view    Boolean @default(false)
+  can_create  Boolean @default(false)
+  can_edit    Boolean @default(false)
+  can_delete  Boolean @default(false)
+  can_approve Boolean @default(false)
+  can_reject  Boolean @default(false)
+  can_export  Boolean @default(false)
+  can_import  Boolean @default(false)
+
+  role Role          @relation(fields: [role_id], references: [id], onDelete: Cascade)
+  page DashboardPage @relation(fields: [page_id], references: [id], onDelete: Cascade)
+
+  @@id([role_id, page_id])
+  @@map("role_page_permissions")
+}
+
+// ============================================================================
+// §3 — MODULE: Product Information Management (PIM) — Super Admin owned only
+// ============================================================================
+
+model Category {
+  id                 String  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  parent_category_id String? @db.Uuid
+  name               String  @db.VarChar(150)
+  name_ar            String? @db.VarChar(150)
+  slug               String  @unique @db.VarChar(150)
+  image_url          String?
+  external_ref       String? @unique @db.VarChar(120)
+  sort_order         Int     @default(0)
+  is_active          Boolean @default(true)
+
+  created_at      DateTime  @default(now()) @db.Timestamptz(6)
+  updated_at      DateTime  @updatedAt @db.Timestamptz(6)
+  deleted_at      DateTime? @db.Timestamptz(6)
+  created_by_type String?   @db.VarChar(20)
+  created_by_id   String?   @db.Uuid
+  updated_by_type String?   @db.VarChar(20)
+  updated_by_id   String?   @db.Uuid
+  is_deleted      Boolean   @default(false)
+  version         Int       @default(1)
+
+  parent_category  Category?  @relation("CategoryParent", fields: [parent_category_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  child_categories Category[] @relation("CategoryParent")
+  products         Product[]
+
+  @@map("categories")
+}
+
+model Product {
+  id               String  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  category_id      String  @db.Uuid
+  sku              String? @unique @db.VarChar(100)
+  barcode          String? @db.VarChar(100)
+  name             String  @db.VarChar(255)
+  description      String?
+  image_url        String?
+  prep_time_mins   Int?    @default(25)
+  external_ref     String? @unique @db.VarChar(120)
+  base_price       Decimal @db.Decimal(12, 2)
+  currency         String  @db.Char(3)
+  tax_class        String? @db.VarChar(50)
+  is_active        Boolean @default(true)
+  visibility       String  @default("public") @db.VarChar(20) // public | restricted
+  sort_order       Int     @default(0)
+  erp_reference_id String? @db.VarChar(100)
+  pos_reference_id String? @db.VarChar(100)
+  search_metadata  Json?
+  attributes       Json?
+
+  created_at      DateTime  @default(now()) @db.Timestamptz(6)
+  updated_at      DateTime  @updatedAt @db.Timestamptz(6)
+  deleted_at      DateTime? @db.Timestamptz(6)
+  created_by_type String?   @db.VarChar(20)
+  created_by_id   String?   @db.Uuid
+  updated_by_type String?   @db.VarChar(20)
+  updated_by_id   String?   @db.Uuid
+  is_deleted      Boolean   @default(false)
+  version         Int       @default(1)
+
+  category              Category              @relation(fields: [category_id], references: [id], onDelete: Restrict)
+  translations          ProductTranslation[]
+  media                 ProductMedia[]
+  variants              ProductVariant[]
+  option_groups         ProductOptionGroup[]
+  availability          ProductAvailability[]
+  tags                  ProductTag[]
+  prices                ProductPrice[]
+  catalog_menu_products CatalogMenuProduct[]
+  order_items           OrderItem[]
+
+  @@index([category_id])
+  @@map("products")
+}
+
+model ProductTranslation {
+  id            String  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  product_id    String  @db.Uuid
+  language_code String  @db.VarChar(10)
+  name          String  @db.VarChar(255)
+  description   String?
+
+  product  Product  @relation(fields: [product_id], references: [id], onDelete: Cascade)
+  language Language @relation(fields: [language_code], references: [code], onDelete: Restrict)
+
+  @@unique([product_id, language_code])
+  @@map("product_translations")
+}
+
+model ProductMedia {
+  id         String  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  product_id String  @db.Uuid
+  media_type String  @db.VarChar(20) // image | video
+  url        String
+  sort_order Int     @default(0)
+  is_primary Boolean @default(false)
+
+  product Product @relation(fields: [product_id], references: [id], onDelete: Cascade)
+
+  @@index([product_id])
+  @@map("product_media")
+}
+
+model ProductVariant {
+  id               String  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  product_id       String  @db.Uuid
+  variant_name     String  @db.VarChar(150)
+  sku              String? @db.VarChar(100)
+  price_adjustment Decimal @default(0) @db.Decimal(12, 2)
+  is_default       Boolean @default(false)
+  is_active        Boolean @default(true)
+
+  product     Product        @relation(fields: [product_id], references: [id], onDelete: Cascade)
+  order_items OrderItem[]
+  prices      ProductPrice[]
+
+  @@index([product_id])
+  @@map("product_variants")
+}
+
+model ProductOptionGroup {
+  id             String  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  product_id     String  @db.Uuid
+  name           String  @db.VarChar(150)
+  selection_type String  @default("single") @db.VarChar(20) // single | multiple
+  min_select     Int     @default(0)
+  max_select     Int     @default(1)
+  is_required    Boolean @default(false)
+
+  product Product         @relation(fields: [product_id], references: [id], onDelete: Cascade)
+  options ProductOption[]
+
+  @@index([product_id])
+  @@map("product_option_groups")
+}
+
+model ProductOption {
+  id               String  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  option_group_id  String  @db.Uuid
+  name             String  @db.VarChar(150)
+  price_adjustment Decimal @default(0) @db.Decimal(12, 2)
+  is_active        Boolean @default(true)
+  sort_order       Int     @default(0)
+
+  option_group       ProductOptionGroup @relation(fields: [option_group_id], references: [id], onDelete: Cascade)
+  order_item_options OrderItemOption[]
+
+  @@index([option_group_id])
+  @@map("product_options")
+}
+
+model ProductAvailability {
+  id             String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  product_id     String    @db.Uuid
+  day_of_week    Int?      @db.SmallInt // 0-6, NULL = every day
+  start_time     DateTime? @db.Time(0)
+  end_time       DateTime? @db.Time(0)
+  available_from DateTime? @db.Date
+  available_to   DateTime? @db.Date
+
+  product Product @relation(fields: [product_id], references: [id], onDelete: Cascade)
+
+  @@index([product_id])
+  @@map("product_availability")
+}
+
+model Tag {
+  id   String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name String @unique @db.VarChar(100)
+
+  product_tags ProductTag[]
+
+  @@map("tags")
+}
+
+model ProductTag {
+  product_id String @db.Uuid
+  tag_id     String @db.Uuid
+
+  product Product @relation(fields: [product_id], references: [id], onDelete: Cascade)
+  tag     Tag     @relation(fields: [tag_id], references: [id], onDelete: Cascade)
+
+  @@id([product_id, tag_id])
+  @@map("product_tags")
+}
+
+model ProductPricingList {
+  id         String  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name       String  @db.VarChar(150)
+  currency   String  @db.Char(3)
+  is_default Boolean @default(false)
+
+  prices              ProductPrice[]
+  company_assignments CompanyPricingListAssignment[]
+
+  @@map("product_pricing_lists")
+}
+
+model ProductPrice {
+  id              String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  pricing_list_id String    @db.Uuid
+  product_id      String    @db.Uuid
+  variant_id      String?   @db.Uuid
+  price           Decimal   @db.Decimal(12, 2)
+  effective_from  DateTime  @default(now()) @db.Timestamptz(6)
+  effective_to    DateTime? @db.Timestamptz(6)
+
+  pricing_list ProductPricingList @relation(fields: [pricing_list_id], references: [id], onDelete: Cascade)
+  product      Product            @relation(fields: [product_id], references: [id], onDelete: Cascade)
+  variant      ProductVariant?    @relation(fields: [variant_id], references: [id], onDelete: Cascade)
+
+  @@index([pricing_list_id, product_id])
+  @@map("product_prices")
+}
+
+model CompanyPricingListAssignment {
+  id              String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  company_id      String    @db.Uuid
+  pricing_list_id String    @db.Uuid
+  effective_from  DateTime  @default(now()) @db.Timestamptz(6)
+  effective_to    DateTime? @db.Timestamptz(6)
+
+  company      Company            @relation(fields: [company_id], references: [id], onDelete: Cascade)
+  pricing_list ProductPricingList @relation(fields: [pricing_list_id], references: [id], onDelete: Cascade)
+
+  @@index([company_id])
+  @@map("company_pricing_list_assignment")
+}
+
+// ============================================================================
+// §4 — MODULE: Menu Assignment (catalog menus)
+// ============================================================================
+
+model CatalogMenu {
+  id          String  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name        String  @db.VarChar(150)
+  menu_type   String  @db.VarChar(30) // general | standard | department | user | temporary | campaign | vip
+  description String?
+  is_active   Boolean @default(true)
+
+  created_at DateTime @default(now()) @db.Timestamptz(6)
+  updated_at DateTime @updatedAt @db.Timestamptz(6)
+
+  sections    CatalogMenuSection[]
+  assignments MenuAssignment[]
+
+  @@map("catalog_menus")
+}
+
+model CatalogMenuSection {
+  id              String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  catalog_menu_id String @db.Uuid
+  name            String @db.VarChar(150)
+  sort_order      Int    @default(0)
+
+  catalog_menu CatalogMenu          @relation(fields: [catalog_menu_id], references: [id], onDelete: Cascade)
+  products     CatalogMenuProduct[]
+
+  @@index([catalog_menu_id])
+  @@map("catalog_menu_sections")
+}
+
+model CatalogMenuProduct {
+  catalog_menu_section_id String  @db.Uuid
+  product_id              String  @db.Uuid
+  sort_order              Int     @default(0)
+  is_featured             Boolean @default(false)
+
+  section CatalogMenuSection @relation(fields: [catalog_menu_section_id], references: [id], onDelete: Cascade)
+  product Product            @relation(fields: [product_id], references: [id], onDelete: Cascade)
+
+  @@id([catalog_menu_section_id, product_id])
+  @@map("catalog_menu_products")
+}
+
+model MenuAssignment {
+  id              String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  catalog_menu_id String    @db.Uuid
+  scope_type      String    @db.VarChar(20) // company | department | user | campaign
+  scope_id        String    @db.Uuid
+  priority        Int       @default(0)
+  effective_from  DateTime  @default(now()) @db.Timestamptz(6)
+  effective_to    DateTime? @db.Timestamptz(6)
+  is_active       Boolean   @default(true)
+
+  catalog_menu CatalogMenu @relation(fields: [catalog_menu_id], references: [id], onDelete: Cascade)
+
+  @@index([scope_type, scope_id, is_active])
+  @@map("menu_assignments")
+}
+
+// ============================================================================
+// §5 — MODULE: Business Rules Engine
+// ============================================================================
+
+model RuleType {
+  id           String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  code         String @unique @db.VarChar(100)
+  name         String @db.VarChar(150)
+  value_schema Json?
+
+  business_rules BusinessRule[]
+
+  @@map("rule_types")
+}
+
+model BusinessRule {
+  id             String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  rule_type_id   String    @db.Uuid
+  scope_type     String    @db.VarChar(20) // platform | company | department | user | product | category
+  scope_id       String?   @db.Uuid
+  value          Json
+  priority       Int       @default(0)
+  effective_from DateTime  @default(now()) @db.Timestamptz(6)
+  effective_to   DateTime? @db.Timestamptz(6)
+  notes          String?
+
+  created_at      DateTime  @default(now()) @db.Timestamptz(6)
+  updated_at      DateTime  @updatedAt @db.Timestamptz(6)
+  deleted_at      DateTime? @db.Timestamptz(6)
+  created_by_type String?   @db.VarChar(20)
+  created_by_id   String?   @db.Uuid
+  updated_by_type String?   @db.VarChar(20)
+  updated_by_id   String?   @db.Uuid
+  is_deleted      Boolean   @default(false)
+  version         Int       @default(1)
+
+  rule_type      RuleType               @relation(fields: [rule_type_id], references: [id], onDelete: Restrict)
+  approval_steps ApprovalWorkflowStep[]
+
+  @@index([rule_type_id, scope_type, scope_id])
+  @@map("business_rules")
+}
+
+model Calendar {
+  id           String  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name         String  @db.VarChar(150)
+  country_code String? @db.VarChar(2)
+  company_id   String? @db.Uuid // NULL = shared/global calendar
+
+  company Company?        @relation(fields: [company_id], references: [id], onDelete: Cascade)
+  events  CalendarEvent[]
+
+  @@map("calendars")
+}
+
+model CalendarEvent {
+  id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  calendar_id String   @db.Uuid
+  event_date  DateTime @db.Date
+  event_type  String   @db.VarChar(20) // holiday | blackout | special_hours
+  name        String   @db.VarChar(150)
+  metadata    Json?
+
+  calendar Calendar @relation(fields: [calendar_id], references: [id], onDelete: Cascade)
+
+  @@index([calendar_id, event_date])
+  @@map("calendar_events")
+}
+
+// ============================================================================
+// §6 — MODULE: Company Configuration
+// ============================================================================
+
+model CompanyConfiguration {
+  id             String  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  company_id     String  @db.Uuid
+  config_key     String  @db.VarChar(150)
+  config_value   Json
+  config_version Int     @default(1)
+  is_active      Boolean @default(true)
+
+  created_at DateTime @default(now()) @db.Timestamptz(6)
+  updated_at DateTime @updatedAt @db.Timestamptz(6)
+
+  company Company @relation(fields: [company_id], references: [id], onDelete: Cascade)
+
+  @@map("company_configurations")
+}
+
+/// Append-only. `changed_by` corrected per §30.2 (either-type).
+model CompanyConfigurationHistory {
+  id              String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  company_id      String   @db.Uuid
+  config_key      String   @db.VarChar(150)
+  config_value    Json
+  config_version  Int
+  changed_by_type String?  @db.VarChar(20) // company_user | dashboard_user
+  changed_by_id   String?  @db.Uuid
+  changed_at      DateTime @default(now()) @db.Timestamptz(6)
+
+  @@index([company_id, config_key])
+  @@map("company_configuration_history")
+}
+
+// ============================================================================
+// §7 — MODULE: Workflow Engine
+// ============================================================================
+
+model Workflow {
+  id            String  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name          String  @db.VarChar(150)
+  workflow_type String  @db.VarChar(30) // order | company_approval | other_future
+  company_id    String? @db.Uuid // NULL = default/global template
+  is_active     Boolean @default(true)
+
+  company     Company?                 @relation(fields: [company_id], references: [id], onDelete: Cascade)
+  steps       WorkflowStep[]
+  transitions WorkflowTransition[]
+  instances   EntityWorkflowInstance[]
+
+  @@map("workflows")
+}
+
+model WorkflowStep {
+  id          String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  workflow_id String @db.Uuid
+  code        String @db.VarChar(100)
+  name        String @db.VarChar(150)
+  step_type   String @db.VarChar(20) // initial | intermediate | final
+  sla_minutes Int?
+  sort_order  Int    @default(0)
+
+  workflow          Workflow                 @relation(fields: [workflow_id], references: [id], onDelete: Cascade)
+  actions           WorkflowAction[]
+  transitions_from  WorkflowTransition[]     @relation("TransitionFrom")
+  transitions_to    WorkflowTransition[]     @relation("TransitionTo")
+  instances_current EntityWorkflowInstance[]
+
+  @@unique([workflow_id, code])
+  @@map("workflow_steps")
+}
+
+model WorkflowTransition {
+  id                     String  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  workflow_id            String  @db.Uuid
+  from_step_id           String? @db.Uuid // NULL = from "any step"
+  to_step_id             String  @db.Uuid
+  trigger_type           String  @db.VarChar(20) // manual | automatic | scheduled
+  required_permission_id String? @db.Uuid
+
+  workflow            Workflow            @relation(fields: [workflow_id], references: [id], onDelete: Cascade)
+  from_step           WorkflowStep?       @relation("TransitionFrom", fields: [from_step_id], references: [id], onDelete: Cascade)
+  to_step             WorkflowStep        @relation("TransitionTo", fields: [to_step_id], references: [id], onDelete: Cascade)
+  required_permission Permission?         @relation(fields: [required_permission_id], references: [id], onDelete: SetNull)
+  conditions          WorkflowCondition[]
+
+  @@map("workflow_transitions")
+}
+
+model WorkflowCondition {
+  id                     String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  workflow_transition_id String @db.Uuid
+  condition_expression   Json
+
+  workflow_transition WorkflowTransition @relation(fields: [workflow_transition_id], references: [id], onDelete: Cascade)
+
+  @@map("workflow_conditions")
+}
+
+model WorkflowAction {
+  id               String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  workflow_step_id String @db.Uuid
+  action_type      String @db.VarChar(30) // notify | webhook | auto_transition | escalate
+  action_config    Json
+
+  workflow_step WorkflowStep @relation(fields: [workflow_step_id], references: [id], onDelete: Cascade)
+
+  @@map("workflow_actions")
+}
+
+model EntityWorkflowInstance {
+  id              String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  workflow_id     String    @db.Uuid
+  entity_type     String    @db.VarChar(50) // order | company
+  entity_id       String    @db.Uuid
+  current_step_id String    @db.Uuid
+  entered_step_at DateTime  @default(now()) @db.Timestamptz(6)
+  sla_due_at      DateTime? @db.Timestamptz(6)
+
+  workflow     Workflow                @relation(fields: [workflow_id], references: [id], onDelete: Restrict)
+  current_step WorkflowStep            @relation(fields: [current_step_id], references: [id], onDelete: Restrict)
+  history      EntityWorkflowHistory[]
+  order        Order?
+
+  @@index([entity_type, entity_id])
+  @@map("entity_workflow_instances")
+}
+
+/// Append-only. `actor_id` corrected per §30.2 (either-type + system).
+model EntityWorkflowHistory {
+  id                   String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  workflow_instance_id String   @db.Uuid
+  from_step_id         String?  @db.Uuid
+  to_step_id           String   @db.Uuid
+  actor_type           String?  @db.VarChar(20) // company_user | dashboard_user | system
+  actor_id             String?  @db.Uuid
+  transitioned_at      DateTime @default(now()) @db.Timestamptz(6)
+  comment              String?
+
+  workflow_instance EntityWorkflowInstance @relation(fields: [workflow_instance_id], references: [id], onDelete: Cascade)
+
+  @@index([workflow_instance_id])
+  @@map("entity_workflow_history")
+}
+
+// ============================================================================
+// §8 — MODULE: Orders
+// ============================================================================
+
+model Order {
+  id                    String          @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  company_id            String          @db.Uuid
+  department_id         String?         @db.Uuid
+  ordered_by_user_id    String          @db.Uuid // -> company_users.id (single-type, §23.8)
+  order_number          String          @unique @db.VarChar(50)
+  workflow_instance_id  String?         @unique @db.Uuid
+  currency              String          @db.Char(3)
+  subtotal_amount       Decimal         @db.Decimal(14, 2)
+  discount_amount       Decimal         @default(0) @db.Decimal(14, 2)
+  tax_amount            Decimal         @default(0) @db.Decimal(14, 2)
+  service_charge_amount Decimal         @default(0) @db.Decimal(14, 2)
+  delivery_fee_amount   Decimal         @default(0) @db.Decimal(14, 2)
+  total_amount          Decimal         @db.Decimal(14, 2)
+  requested_delivery_at DateTime        @db.Timestamptz(6)
+  delivery_address_id   String?         @db.Uuid
+  fulfillment_type      FulfillmentType
+  coupon_id             String?         @db.Uuid
+  source_channel        String          @default("web") @db.VarChar(20) // web | mobile | api
+  is_bulk_order         Boolean         @default(false)
+  parent_order_id       String?         @db.Uuid
+  fulfillment_qr_token  String?         @unique @db.VarChar(64)
+
+  created_at      DateTime  @default(now()) @db.Timestamptz(6)
+  updated_at      DateTime  @updatedAt @db.Timestamptz(6)
+  deleted_at      DateTime? @db.Timestamptz(6)
+  created_by_type String?   @db.VarChar(20)
+  created_by_id   String?   @db.Uuid
+  updated_by_type String?   @db.VarChar(20)
+  updated_by_id   String?   @db.Uuid
+  is_deleted      Boolean   @default(false)
+  version         Int       @default(1)
+
+  company           Company                 @relation(fields: [company_id], references: [id], onDelete: Restrict)
+  department        Department?             @relation(fields: [department_id], references: [id], onDelete: SetNull)
+  ordered_by        CompanyUser             @relation("OrderPlacedBy", fields: [ordered_by_user_id], references: [id], onDelete: Restrict)
+  workflow_instance EntityWorkflowInstance? @relation(fields: [workflow_instance_id], references: [id], onDelete: SetNull)
+  delivery_address  CompanyAddress?         @relation("OrderDeliveryAddress", fields: [delivery_address_id], references: [id], onDelete: SetNull)
+  parent_order      Order?                  @relation("OrderParent", fields: [parent_order_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  child_orders      Order[]                 @relation("OrderParent")
+
+  items            OrderItem[]
+  status_history   OrderStatusHistory[]
+  notes            OrderNote[]
+  approvals        OrderApproval[]
+  delivery_details OrderDeliveryDetails?
+  cancellation     OrderCancellation?
+
+  @@index([company_id, created_at(sort: Desc)])
+  @@map("orders")
+}
+
+model OrderItem {
+  id                    String  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  order_id              String  @db.Uuid
+  product_id            String  @db.Uuid
+  variant_id            String? @db.Uuid
+  product_name_snapshot String  @db.VarChar(255)
+  unit_price_snapshot   Decimal @db.Decimal(12, 2)
+  quantity              Int
+  line_total            Decimal @db.Decimal(14, 2)
+  notes                 String?
+
+  order   Order             @relation(fields: [order_id], references: [id], onDelete: Cascade)
+  product Product           @relation(fields: [product_id], references: [id], onDelete: Restrict)
+  variant ProductVariant?   @relation(fields: [variant_id], references: [id], onDelete: SetNull)
+  options OrderItemOption[]
+
+  @@index([order_id])
+  @@map("order_items")
+}
+
+model OrderItemOption {
+  id                        String  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  order_item_id             String  @db.Uuid
+  product_option_id         String  @db.Uuid
+  price_adjustment_snapshot Decimal @db.Decimal(12, 2)
+
+  order_item     OrderItem     @relation(fields: [order_item_id], references: [id], onDelete: Cascade)
+  product_option ProductOption @relation(fields: [product_option_id], references: [id], onDelete: Restrict)
+
+  @@map("order_item_options")
+}
+
+/// Denormalized convenience log, kept alongside `entity_workflow_history` (§8.4).
+model OrderStatusHistory {
+  id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  order_id    String   @db.Uuid
+  status_code String   @db.VarChar(50)
+  changed_by  String?  @db.Uuid
+  changed_at  DateTime @default(now()) @db.Timestamptz(6)
+  comment     String?
+
+  order Order @relation(fields: [order_id], references: [id], onDelete: Cascade)
+
+  @@index([order_id])
+  @@map("order_status_history")
+}
+
+/// `author_id` corrected per §30.2 (either-type).
+model OrderNote {
+  id          String  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  order_id    String  @db.Uuid
+  author_type String  @db.VarChar(20) // company_user | dashboard_user
+  author_id   String  @db.Uuid
+  note        String
+  is_internal Boolean @default(false)
+
+  created_at DateTime @default(now()) @db.Timestamptz(6)
+
+  order Order @relation(fields: [order_id], references: [id], onDelete: Cascade)
+
+  @@index([order_id])
+  @@map("order_notes")
+}
+
+/// `approver_id` corrected per §30.2 (either-type).
+model OrderApproval {
+  id             String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  order_id       String    @db.Uuid
+  approver_type  String    @db.VarChar(20) // company_user | dashboard_user
+  approver_id    String    @db.Uuid
+  approval_level Int       @default(1)
+  status         String    @default("pending") @db.VarChar(20) // pending | approved | rejected
+  decided_at     DateTime? @db.Timestamptz(6)
+  comment        String?
+
+  created_at DateTime @default(now()) @db.Timestamptz(6)
+
+  order Order @relation(fields: [order_id], references: [id], onDelete: Cascade)
+
+  @@index([order_id])
+  @@map("order_approvals")
+}
+
+/// `delivery_proof_document_id` removed per §30.5 — use `file_attachments`
+/// (`entity_type='order'`, `attachment_type='delivery_proof'`) instead.
+model OrderDeliveryDetails {
+  id                         String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  order_id                   String    @unique @db.Uuid
+  assigned_dashboard_user_id String?   @db.Uuid
+  assigned_by                String?   @db.Uuid
+  assigned_at                DateTime? @db.Timestamptz(6)
+  driver_name                String?   @db.VarChar(150)
+  driver_phone               String?   @db.VarChar(30)
+  vehicle_info               String?   @db.VarChar(150)
+  tracking_reference         String?   @db.VarChar(100)
+  delivered_at               DateTime? @db.Timestamptz(6)
+
+  order                   Order          @relation(fields: [order_id], references: [id], onDelete: Cascade)
+  assigned_dashboard_user DashboardUser? @relation("DeliveryAssignedUser", fields: [assigned_dashboard_user_id], references: [id], onDelete: SetNull)
+  assigned_by_user        DashboardUser? @relation("DeliveryAssignedBy", fields: [assigned_by], references: [id], onDelete: SetNull)
+
+  @@index([assigned_dashboard_user_id])
+  @@map("order_delivery_details")
+}
+
+/// `cancelled_by` corrected per §30.2 (either-type + system).
+model OrderCancellation {
+  id                String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  order_id          String   @unique @db.Uuid
+  cancelled_by_type String?  @db.VarChar(20) // company_user | dashboard_user | system
+  cancelled_by_id   String?  @db.Uuid
+  reason_code       String?  @db.VarChar(50)
+  reason_text       String?
+  cancelled_at      DateTime @default(now()) @db.Timestamptz(6)
+
+  order Order @relation(fields: [order_id], references: [id], onDelete: Cascade)
+
+  @@map("order_cancellations")
+}
+
+// ============================================================================
+// §9 — MODULE: Tracking Timeline (immutable, append-only)
+// ============================================================================
+
+/// `actor_id` corrected per §30.2 (either-type + system). No update/delete ever
+/// (enforce with a DB trigger in addition to the application-layer rule, §9.1).
+model TimelineEvent {
+  id           String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  entity_type  String   @db.VarChar(50) // company | order | menu_assignment | user | ...
+  entity_id    String   @db.Uuid
+  event_code   String   @db.VarChar(100)
+  actor_type   String?  @db.VarChar(20) // company_user | dashboard_user | system
+  actor_id     String?  @db.Uuid
+  actor_role   String?  @db.VarChar(100) // denormalized display role at time of event
+  source       String   @default("system") @db.VarChar(30) // web | mobile | api | system
+  device_info  String?  @db.VarChar(255)
+  ip_address   String?  @db.VarChar(45)
+  geo_location Json?
+  comment      String?
+  metadata     Json?
+  occurred_at  DateTime @default(now()) @db.Timestamptz(6)
+
+  @@index([entity_type, entity_id, occurred_at])
+  @@index([event_code])
+  @@map("timeline_events")
+}
+
+// ============================================================================
+// §10 — MODULE: Notifications
+// ============================================================================
+
+model NotificationTemplate {
+  id               String  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  code             String  @db.VarChar(100)
+  channel          String  @db.VarChar(20) // email | sms | push | in_app | system
+  subject_template String?
+  body_template    String
+  language_code    String  @db.VarChar(10)
+
+  language      Language       @relation(fields: [language_code], references: [code], onDelete: Restrict)
+  notifications Notification[]
+
+  @@unique([code, channel, language_code])
+  @@map("notification_templates")
+}
+
+/// `recipient_user_id` corrected per §30.2 (either-type).
+model Notification {
+  id                   String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  template_id          String?   @db.Uuid
+  channel              String    @db.VarChar(20)
+  recipient_type       String?   @db.VarChar(20) // company_user | dashboard_user
+  recipient_id         String?   @db.Uuid
+  recipient_company_id String?   @db.Uuid // for company-wide broadcasts
+  subject              String?
+  body                 String
+  status               String    @default("queued") @db.VarChar(20) // queued | sent | delivered | failed | read
+  sent_at              DateTime? @db.Timestamptz(6)
+  read_at              DateTime? @db.Timestamptz(6)
+  related_entity_type  String?   @db.VarChar(50)
+  related_entity_id    String?   @db.Uuid
+
+  created_at DateTime @default(now()) @db.Timestamptz(6)
+
+  template NotificationTemplate? @relation(fields: [template_id], references: [id], onDelete: SetNull)
+
+  @@index([recipient_type, recipient_id])
+  @@index([recipient_company_id])
+  @@map("notifications")
+}
+
+/// `user_id` corrected per §30.2 (either-type).
+model DeviceToken {
+  id           String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  owner_type   String    @db.VarChar(20) // company_user | dashboard_user
+  owner_id     String    @db.Uuid
+  platform     String    @db.VarChar(20) // ios | android | web
+  token        String
+  is_active    Boolean   @default(true)
+  last_used_at DateTime? @db.Timestamptz(6)
+
+  @@index([owner_type, owner_id])
+  @@map("device_tokens")
+}
+
+// ============================================================================
+// §11 / §30.2 — MODULE: Security & Authentication
+// (split per-audience per §30.2 instead of a polymorphic `user_id`, so each
+// table keeps a real, indexed, cascading FK)
+// ============================================================================
+
+model CompanyUserSession {
+  id                 String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  company_user_id    String    @db.Uuid
+  session_token_hash String
+  ip_address         String?   @db.VarChar(45)
+  user_agent         String?
+  created_at         DateTime  @default(now()) @db.Timestamptz(6)
+  expires_at         DateTime  @db.Timestamptz(6)
+  revoked_at         DateTime? @db.Timestamptz(6)
+
+  company_user CompanyUser @relation(fields: [company_user_id], references: [id], onDelete: Cascade)
+
+  @@index([company_user_id])
+  @@map("company_user_sessions")
+}
+
+model DashboardUserSession {
+  id                 String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  dashboard_user_id  String    @db.Uuid
+  session_token_hash String
+  ip_address         String?   @db.VarChar(45)
+  user_agent         String?
+  created_at         DateTime  @default(now()) @db.Timestamptz(6)
+  expires_at         DateTime  @db.Timestamptz(6)
+  revoked_at         DateTime? @db.Timestamptz(6)
+
+  dashboard_user DashboardUser @relation(fields: [dashboard_user_id], references: [id], onDelete: Cascade)
+
+  @@index([dashboard_user_id])
+  @@map("dashboard_user_sessions")
+}
+
+model CompanyUserRefreshToken {
+  id                   String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  company_user_id      String    @db.Uuid
+  token_hash           String    @unique
+  issued_at            DateTime  @default(now()) @db.Timestamptz(6)
+  expires_at           DateTime  @db.Timestamptz(6)
+  revoked_at           DateTime? @db.Timestamptz(6)
+  replaced_by_token_id String?   @db.Uuid
+
+  company_user CompanyUser               @relation(fields: [company_user_id], references: [id], onDelete: Cascade)
+  replaced_by  CompanyUserRefreshToken?  @relation("CompanyRefreshTokenChain", fields: [replaced_by_token_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  replaces     CompanyUserRefreshToken[] @relation("CompanyRefreshTokenChain")
+
+  @@index([company_user_id])
+  @@map("company_user_refresh_tokens")
+}
+
+model DashboardUserRefreshToken {
+  id                   String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  dashboard_user_id    String    @db.Uuid
+  token_hash           String    @unique
+  issued_at            DateTime  @default(now()) @db.Timestamptz(6)
+  expires_at           DateTime  @db.Timestamptz(6)
+  revoked_at           DateTime? @db.Timestamptz(6)
+  replaced_by_token_id String?   @db.Uuid
+
+  dashboard_user DashboardUser               @relation(fields: [dashboard_user_id], references: [id], onDelete: Cascade)
+  replaced_by    DashboardUserRefreshToken?  @relation("DashboardRefreshTokenChain", fields: [replaced_by_token_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  replaces       DashboardUserRefreshToken[] @relation("DashboardRefreshTokenChain")
+
+  @@index([dashboard_user_id])
+  @@map("dashboard_user_refresh_tokens")
+}
+
+/// Append-only.
+model CompanyUserLoginHistory {
+  id              String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  company_user_id String?  @db.Uuid // NULL if the attempted email matched no account
+  attempted_email String   @db.VarChar(255)
+  success         Boolean
+  failure_reason  String?  @db.VarChar(100)
+  ip_address      String?  @db.VarChar(45)
+  user_agent      String?
+  occurred_at     DateTime @default(now()) @db.Timestamptz(6)
+
+  company_user CompanyUser? @relation(fields: [company_user_id], references: [id], onDelete: SetNull)
+
+  @@map("company_user_login_history")
+}
+
+/// Append-only.
+model DashboardUserLoginHistory {
+  id                String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  dashboard_user_id String?  @db.Uuid
+  attempted_email   String   @db.VarChar(255)
+  success           Boolean
+  failure_reason    String?  @db.VarChar(100)
+  ip_address        String?  @db.VarChar(45)
+  user_agent        String?
+  occurred_at       DateTime @default(now()) @db.Timestamptz(6)
+
+  dashboard_user DashboardUser? @relation(fields: [dashboard_user_id], references: [id], onDelete: SetNull)
+
+  @@map("dashboard_user_login_history")
+}
+
+model CompanyUserPasswordResetToken {
+  id              String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  company_user_id String    @db.Uuid
+  token_hash      String    @unique
+  expires_at      DateTime  @db.Timestamptz(6)
+  used_at         DateTime? @db.Timestamptz(6)
+
+  company_user CompanyUser @relation(fields: [company_user_id], references: [id], onDelete: Cascade)
+
+  @@map("company_user_password_reset_tokens")
+}
+
+model DashboardUserPasswordResetToken {
+  id                String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  dashboard_user_id String    @db.Uuid
+  token_hash        String    @unique
+  expires_at        DateTime  @db.Timestamptz(6)
+  used_at           DateTime? @db.Timestamptz(6)
+
+  dashboard_user DashboardUser @relation(fields: [dashboard_user_id], references: [id], onDelete: Cascade)
+
+  @@map("dashboard_user_password_reset_tokens")
+}
+
+model CompanyUserOtpCode {
+  id              String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  company_user_id String?   @db.Uuid // NULL for a brand-new registrant with no row yet
+  destination     String    @db.VarChar(255)
+  purpose         String    @db.VarChar(30) // login | registration | password_reset
+  code_hash       String
+  expires_at      DateTime  @db.Timestamptz(6)
+  consumed_at     DateTime? @db.Timestamptz(6)
+  attempt_count   Int       @default(0) @db.SmallInt
+
+  company_user CompanyUser? @relation(fields: [company_user_id], references: [id], onDelete: Cascade)
+
+  @@map("company_user_otp_codes")
+}
+
+model DashboardUserOtpCode {
+  id                String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  dashboard_user_id String?   @db.Uuid
+  destination       String    @db.VarChar(255)
+  purpose           String    @db.VarChar(30)
+  code_hash         String
+  expires_at        DateTime  @db.Timestamptz(6)
+  consumed_at       DateTime? @db.Timestamptz(6)
+  attempt_count     Int       @default(0) @db.SmallInt
+
+  dashboard_user DashboardUser? @relation(fields: [dashboard_user_id], references: [id], onDelete: Cascade)
+
+  @@map("dashboard_user_otp_codes")
+}
+
+// ============================================================================
+// §12 — MODULE: Generic Audit System
+// ============================================================================
+
+/// Append-only, universal. `changed_by` corrected per §30.2 (either-type + system).
+model AuditLog {
+  id              String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  entity_name     String   @db.VarChar(100)
+  entity_id       String   @db.Uuid
+  action          String   @db.VarChar(20) // insert | update | delete | restore
+  old_values      Json?
+  new_values      Json?
+  changed_fields  Json?
+  changed_by_type String?  @db.VarChar(20) // company_user | dashboard_user | system
+  changed_by_id   String?  @db.Uuid
+  changed_at      DateTime @default(now()) @db.Timestamptz(6)
+  reason          String?
+  source          String   @db.VarChar(30) // api | admin_panel | system_job
+  correlation_id  String   @db.Uuid
+  request_id      String?  @db.Uuid
+
+  @@index([entity_name, entity_id, changed_at])
+  @@index([correlation_id])
+  @@map("audit_logs")
+}
+
+// ============================================================================
+// §19 — MODULE: Future Integrations & Extensibility (schema-only in v1)
+// ============================================================================
+
+model ExternalSystem {
+  id          String  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  code        String  @unique @db.VarChar(50) // odoo | sap | oracle | dynamics | custom_erp_1 ...
+  name        String  @db.VarChar(150)
+  system_type String  @db.VarChar(30) // erp | pos | crm | accounting | other
+  base_url    String?
+  auth_config Json? // encrypted at rest at the application layer
+  is_active   Boolean @default(false)
+
+  mappings           ExternalSystemMapping[]
+  integration_events IntegrationEvent[]
+
+  @@map("external_systems")
+}
+
+model ExternalSystemMapping {
+  id                      String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  external_system_id      String    @db.Uuid
+  entity_type             String    @db.VarChar(50)
+  entity_id               String    @db.Uuid // no FK — polymorphic
+  external_id             String    @db.VarChar(150)
+  external_secondary_id   String?   @db.VarChar(150)
+  external_reference_type String?   @db.VarChar(50)
+  external_sku            String?   @db.VarChar(100)
+  sync_status             String    @default("not_synced") @db.VarChar(20)
+  sync_version            Int       @default(0)
+  sync_direction          String    @default("outbound") @db.VarChar(20)
+  last_synced_at          DateTime? @db.Timestamptz(6)
+  last_sync_error         String?
+  sync_attempts           Int       @default(0)
+  is_synced               Boolean   @default(false)
+  created_from            String    @default("local") @db.VarChar(20)
+  updated_from            String    @default("local") @db.VarChar(20)
+  manual_override         Boolean   @default(false)
+  has_local_changes       Boolean   @default(false)
+
+  external_system ExternalSystem @relation(fields: [external_system_id], references: [id], onDelete: Cascade)
+
+  @@unique([external_system_id, entity_type, entity_id, external_reference_type])
+  @@index([entity_type, entity_id])
+  @@index([external_system_id, sync_status])
+  @@map("external_system_mappings")
+}
+
+model IntegrationEvent {
+  id               String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  event_code       String    @db.VarChar(100)
+  entity_type      String    @db.VarChar(50)
+  entity_id        String    @db.Uuid
+  payload          Json
+  occurred_at      DateTime  @default(now()) @db.Timestamptz(6)
+  target_system_id String?   @db.Uuid
+  status           String    @default("pending") @db.VarChar(20)
+  processed_at     DateTime? @db.Timestamptz(6)
+  retry_count      Int       @default(0)
+  last_error       String?
+  correlation_id   String?   @db.Uuid
+
+  target_system ExternalSystem? @relation(fields: [target_system_id], references: [id], onDelete: SetNull)
+
+  @@index([status, occurred_at])
+  @@index([entity_type, entity_id])
+  @@map("integration_events")
+}
+
+// ============================================================================
+// §24 — MODULE: Generic Approval Workflow Engine (schema only)
+// ============================================================================
+
+model ApprovalWorkflow {
+  id          String  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name        String  @db.VarChar(150)
+  entity_type String  @db.VarChar(50) // company_registration | order | future_entity
+  company_id  String? @db.Uuid // NULL = platform-default
+  is_active   Boolean @default(true)
+
+  company  Company?               @relation(fields: [company_id], references: [id], onDelete: Cascade)
+  steps    ApprovalWorkflowStep[]
+  requests ApprovalRequest[]
+
+  @@map("approval_workflows")
+}
+
+model ApprovalWorkflowStep {
+  id                         String  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  approval_workflow_id       String  @db.Uuid
+  step_order                 Int
+  name                       String  @db.VarChar(150)
+  approver_type              String  @db.VarChar(20) // role | dashboard_user | dynamic_rule
+  approver_role_id           String? @db.Uuid
+  approver_dashboard_user_id String? @db.Uuid
+  approval_rule_id           String? @db.Uuid
+  required_approval_count    Int     @default(1)
+  is_required                Boolean @default(true)
+
+  approval_workflow       ApprovalWorkflow @relation(fields: [approval_workflow_id], references: [id], onDelete: Cascade)
+  approver_role           Role?            @relation(fields: [approver_role_id], references: [id], onDelete: SetNull)
+  approver_dashboard_user DashboardUser?   @relation(fields: [approver_dashboard_user_id], references: [id], onDelete: SetNull)
+  approval_rule           BusinessRule?    @relation(fields: [approval_rule_id], references: [id], onDelete: SetNull)
+
+  @@index([approval_workflow_id, step_order])
+  @@map("approval_workflow_steps")
+}
+
+model ApprovalRequest {
+  id                   String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  approval_workflow_id String    @db.Uuid
+  entity_type          String    @db.VarChar(50)
+  entity_id            String    @db.Uuid
+  status               String    @default("pending") @db.VarChar(20) // pending | approved | rejected | cancelled
+  current_step_order   Int       @default(1)
+  requested_by_type    String    @db.VarChar(20) // company_user | dashboard_user | system
+  requested_by_id      String    @db.Uuid
+  requested_at         DateTime  @default(now()) @db.Timestamptz(6)
+  completed_at         DateTime? @db.Timestamptz(6)
+
+  approval_workflow ApprovalWorkflow   @relation(fields: [approval_workflow_id], references: [id], onDelete: Restrict)
+  decisions         ApprovalDecision[]
+
+  @@index([entity_type, entity_id])
+  @@index([status, current_step_order])
+  @@map("approval_requests")
+}
+
+/// Append-only.
+model ApprovalDecision {
+  id                  String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  approval_request_id String   @db.Uuid
+  step_order          Int
+  decided_by_type     String   @db.VarChar(20) // dashboard_user | company_user
+  decided_by_id       String   @db.Uuid
+  decision            String   @db.VarChar(20) // approved | rejected
+  comment             String?
+  decided_at          DateTime @default(now()) @db.Timestamptz(6)
+
+  approval_request ApprovalRequest @relation(fields: [approval_request_id], references: [id], onDelete: Cascade)
+
+  @@index([approval_request_id])
+  @@map("approval_decisions")
+}
+
+// ============================================================================
+// §25 — MODULE: Background Jobs (schema only — worker implemented on top)
+// ============================================================================
+
+model BackgroundJob {
+  id              String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  job_type        String    @db.VarChar(100)
+  payload         Json
+  status          String    @default("pending") @db.VarChar(20) // pending | running | completed | failed | retrying | cancelled
+  priority        Int       @default(0) @db.SmallInt
+  queue_name      String    @default("default") @db.VarChar(50)
+  scheduled_at    DateTime  @default(now()) @db.Timestamptz(6)
+  started_at      DateTime? @db.Timestamptz(6)
+  completed_at    DateTime? @db.Timestamptz(6)
+  retry_count     Int       @default(0)
+  max_retries     Int       @default(3)
+  last_error      String?
+  correlation_id  String?   @db.Uuid
+  created_by_type String?   @db.VarChar(20) // dashboard_user | system
+  created_by_id   String?   @db.Uuid
+
+  execution_logs JobExecutionLog[]
+
+  @@index([status, priority(sort: Desc), scheduled_at])
+  @@map("background_jobs")
+}
+
+model JobSchedule {
+  id              String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  job_type        String    @db.VarChar(100)
+  cron_expression String    @db.VarChar(100)
+  default_payload Json?
+  is_active       Boolean   @default(true)
+  last_run_at     DateTime? @db.Timestamptz(6)
+  next_run_at     DateTime? @db.Timestamptz(6)
+
+  @@map("job_schedules")
+}
+
+/// Append-only.
+model JobExecutionLog {
+  id                String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  background_job_id String    @db.Uuid
+  attempt_number    Int
+  started_at        DateTime  @default(now()) @db.Timestamptz(6)
+  finished_at       DateTime? @db.Timestamptz(6)
+  status            String    @db.VarChar(20) // success | failure
+  output            Json?
+  error_message     String?
+
+  background_job BackgroundJob @relation(fields: [background_job_id], references: [id], onDelete: Cascade)
+
+  @@index([background_job_id])
+  @@map("job_execution_logs")
+}
+
+// ============================================================================
+// §26 — MODULE: Centralized File Management
+// ============================================================================
+
+model File {
+  id               String  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  file_name        String  @db.VarChar(255)
+  storage_key      String
+  storage_provider String  @db.VarChar(30) // s3 | azure_blob | local ...
+  url              String?
+  mime_type        String  @db.VarChar(100)
+  size_bytes       BigInt
+  checksum         String? @db.VarChar(128)
+  uploaded_by_type String  @db.VarChar(20) // company_user | dashboard_user | system
+  uploaded_by_id   String? @db.Uuid
+  is_public        Boolean @default(false)
+
+  created_at DateTime @default(now()) @db.Timestamptz(6)
+
+  attachments FileAttachment[]
+
+  @@map("files")
+}
+
+model FileAttachment {
+  id                  String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  file_id             String    @db.Uuid
+  entity_type         String    @db.VarChar(50) // company | product | order | invoice | category | dashboard_user ...
+  entity_id           String    @db.Uuid // no FK — polymorphic
+  attachment_type     String    @db.VarChar(50)
+  sort_order          Int       @default(0)
+  caption             String?   @db.VarChar(255)
+  expiry_date         DateTime? @db.Date
+  verification_status String?   @db.VarChar(30) // pending | verified | rejected
+  verified_by         String?   @db.Uuid
+  verified_at         DateTime? @db.Timestamptz(6)
+
+  created_at DateTime @default(now()) @db.Timestamptz(6)
+  updated_at DateTime @updatedAt @db.Timestamptz(6)
+
+  file             File           @relation(fields: [file_id], references: [id], onDelete: Cascade)
+  verified_by_user DashboardUser? @relation(fields: [verified_by], references: [id], onDelete: SetNull)
+
+  @@index([entity_type, entity_id, attachment_type])
+  @@map("file_attachments")
+}
+
+// ============================================================================
+// §27 — MODULE: Global Settings & Company Settings Override Architecture
+// ============================================================================
+
+model GlobalSetting {
+  id             String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  setting_key    String   @unique @db.VarChar(150)
+  setting_value  Json
+  is_overridable Boolean  @default(true)
+  description    String?
+  updated_by     String?  @db.Uuid
+  updated_at     DateTime @updatedAt @db.Timestamptz(6)
+
+  updated_by_user DashboardUser? @relation(fields: [updated_by], references: [id], onDelete: SetNull)
+
+  @@map("global_settings")
+}
+
+/// Append-only.
+model GlobalSettingHistory {
+  id            String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  setting_key   String   @db.VarChar(150)
+  setting_value Json
+  changed_by    String?  @db.Uuid
+  changed_at    DateTime @default(now()) @db.Timestamptz(6)
+
+  changed_by_user DashboardUser? @relation(fields: [changed_by], references: [id], onDelete: SetNull)
+
+  @@index([setting_key])
+  @@map("global_settings_history")
+}
+
+// ============================================================================
+// §28 — MODULE: Localization / Multilingual Support
+// ============================================================================
+
+model Language {
+  code        String  @id @db.VarChar(10)
+  name        String  @db.VarChar(100)
+  native_name String  @db.VarChar(100)
+  is_rtl      Boolean @default(false)
+  is_active   Boolean @default(true)
+  is_default  Boolean @default(false)
+
+  companies              Company[]
+  company_users          CompanyUser[]
+  product_translations   ProductTranslation[]
+  notification_templates NotificationTemplate[]
+
+  @@map("languages")
+}
+
+/// Generic polymorphic translation table — default pattern for every entity
+/// except `products` (which keeps its dedicated high-traffic table, §28.3).
+model Translation {
+  id               String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  entity_type      String @db.VarChar(50) // category | catalog_menu | dashboard_page | notification_template | module | feature | menu_group ...
+  entity_id        String @db.Uuid // no FK — polymorphic
+  field_name       String @db.VarChar(100)
+  language_code    String @db.VarChar(10)
+  translated_value String
+
+  @@unique([entity_type, entity_id, field_name, language_code])
+  @@map("translations")
+}
+
+// ============================================================================
+// §29.3 — MODULE: Future Company Users Module (dormant, feature-gated)
+// ============================================================================
+
+model CompanyRole {
+  id             String  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  company_id     String? @db.Uuid // NULL = system-provided template role
+  name           String  @db.VarChar(100)
+  is_system_role Boolean @default(false)
+
+  company     Company?                @relation(fields: [company_id], references: [id], onDelete: Cascade)
+  permissions CompanyRolePermission[]
+  user_roles  CompanyUserRole[]
+
+  @@map("company_roles")
+}
+
+model CompanyPermission {
+  id          String  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  code        String  @unique @db.VarChar(150)
+  name        String  @db.VarChar(150)
+  description String?
+
+  role_permissions CompanyRolePermission[]
+
+  @@map("company_permissions")
+}
+
+model CompanyRolePermission {
+  company_role_id       String @db.Uuid
+  company_permission_id String @db.Uuid
+  effect                String @default("allow") @db.VarChar(10) // allow | deny
+
+  company_role       CompanyRole       @relation(fields: [company_role_id], references: [id], onDelete: Cascade)
+  company_permission CompanyPermission @relation(fields: [company_permission_id], references: [id], onDelete: Cascade)
+
+  @@id([company_role_id, company_permission_id])
+  @@map("company_role_permissions")
+}
+
+model CompanyUserRole {
+  company_user_id String   @db.Uuid
+  company_role_id String   @db.Uuid
+  assigned_by     String?  @db.Uuid // -> dashboard_users.id (only internal staff can enable this)
+  assigned_at     DateTime @default(now()) @db.Timestamptz(6)
+
+  company_user     CompanyUser    @relation(fields: [company_user_id], references: [id], onDelete: Cascade)
+  company_role     CompanyRole    @relation(fields: [company_role_id], references: [id], onDelete: Cascade)
+  assigned_by_user DashboardUser? @relation(fields: [assigned_by], references: [id], onDelete: SetNull)
+
+  @@id([company_user_id, company_role_id])
+  @@map("company_user_roles")
+}

@@ -1,0 +1,48 @@
+import { Router } from 'express';
+import healthRouter from '../modules/health/health.routes';
+import filesRouter from '../modules/files/files.routes';
+import authRouter from '../modules/auth/auth.routes';
+import onboardingRouter from '../modules/company-onboarding/onboarding.routes';
+import dashboardCompaniesRouter from '../modules/dashboard-companies/dashboard-companies.routes';
+import rbacRouter from '../modules/dashboard-users-rbac/rbac.routes';
+import featuresRouter from '../modules/features-dashboard/features.routes';
+import meRouter from '../modules/me/me.routes';
+import catalogRouter from '../modules/catalog/catalog.routes';
+import menusRouter from '../modules/menus/menus.routes';
+import businessRulesRouter from '../modules/business-rules/business-rules.routes';
+import settingsRouter from '../modules/settings/settings.routes';
+import workflowsRouter from '../modules/workflows/workflows.routes';
+import ordersRouter from '../modules/orders/orders.routes';
+import approvalWorkflowsRouter from '../modules/approval-workflows/approval-workflows.routes';
+import auditRouter from '../modules/audit/audit.routes';
+import notificationsRouter from '../modules/notifications/notifications.routes';
+import jobsRouter from '../modules/jobs/jobs.routes';
+import integrationsRouter from '../modules/integrations/integrations.routes';
+import localizationRouter from '../modules/localization/localization.routes';
+import fulfillmentRouter from '../modules/fulfillment/fulfillment.routes';
+
+const router = Router();
+
+router.use('/v1', healthRouter);
+router.use('/v1', filesRouter);
+router.use('/v1', authRouter);
+router.use('/v1', onboardingRouter);
+router.use('/v1', dashboardCompaniesRouter);
+router.use('/v1', rbacRouter);
+router.use('/v1', featuresRouter);
+router.use('/v1', meRouter);
+router.use('/v1', catalogRouter);
+router.use('/v1', menusRouter);
+router.use('/v1', businessRulesRouter);
+router.use('/v1', settingsRouter);
+router.use('/v1', workflowsRouter);
+router.use('/v1', ordersRouter);
+router.use('/v1', approvalWorkflowsRouter);
+router.use('/v1', auditRouter);
+router.use('/v1', notificationsRouter);
+router.use('/v1', jobsRouter);
+router.use('/v1', integrationsRouter);
+router.use('/v1', localizationRouter);
+router.use('/v1', fulfillmentRouter);
+
+export default router;

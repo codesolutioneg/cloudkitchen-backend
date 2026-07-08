@@ -1,0 +1,258 @@
+{
+  "runId": "r5rnm7hn0cvi",
+  "seed": 9214125,
+  "startedAt": "2026-07-07T10:32:47.191Z",
+  "note": "Persisted test data — inspect in Postgres; rows are intentionally not deleted.",
+  "credentials": {
+    "companyUserEmail": "e2e-r5rnm7hn0cvi-user@rapid-distinction.biz",
+    "companyPassword": "E2e!SifLVSL_rG789",
+    "dashboardEmail": "admin@cloudkitchen.example",
+    "dashboardPassword": "Admin@12345"
+  },
+  "entities": {
+    "dashboardUserId": null,
+    "companyId": "90e9fbf4-c2f1-43fe-a762-e388d66e7ee1",
+    "legalName": "Roberts Group",
+    "approvalStatus": "approved",
+    "categoryId": "a4ed96ac-d47b-411d-8529-dacc1dd8e95f",
+    "productId": "56865095-608a-484e-9965-2ec18c660288",
+    "pricingListId": "f86b07ac-4bcc-49f8-b27e-aec4c86d89ee",
+    "menuId": "a5a8ef26-fd7b-4173-8ed8-42c0eebadb15",
+    "companyUserId": "35707288-28a0-4a32-989b-6f2d5a647202",
+    "orderId": "8592f1e9-d1c4-4e10-8d38-2de2204b063a",
+    "orderNumber": "ORD-20260707-546C6F",
+    "businessRuleId": "971d6aef-7998-4b82-9cbd-e26d390eb6e4",
+    "jobId": "1da35144-3d10-4f57-8d05-889392135b9a"
+  },
+  "endpointsHit": [
+    {
+      "method": "GET",
+      "path": "/api/v1/health",
+      "status": 200,
+      "at": "2026-07-07T10:32:47.249Z"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/auth/dashboard/login",
+      "status": 200,
+      "at": "2026-07-07T10:32:47.548Z"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/company/onboarding/register",
+      "status": 201,
+      "at": "2026-07-07T10:32:48.006Z"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/dashboard/companies/90e9fbf4-c2f1-43fe-a762-e388d66e7ee1/approve",
+      "status": 200,
+      "at": "2026-07-07T10:32:48.065Z"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/dashboard/catalog/categories",
+      "status": 201,
+      "at": "2026-07-07T10:32:48.104Z"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/dashboard/catalog/products",
+      "status": 201,
+      "at": "2026-07-07T10:32:48.132Z"
+    },
+    {
+      "method": "PUT",
+      "path": "/api/v1/dashboard/catalog/products/56865095-608a-484e-9965-2ec18c660288/translations/ar",
+      "status": 200,
+      "at": "2026-07-07T10:32:48.164Z"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/dashboard/catalog/pricing-lists",
+      "status": 201,
+      "at": "2026-07-07T10:32:48.179Z"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/dashboard/catalog/prices",
+      "status": 422,
+      "at": "2026-07-07T10:32:48.189Z"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/dashboard/menus",
+      "status": 201,
+      "at": "2026-07-07T10:32:48.228Z"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/dashboard/menus/a5a8ef26-fd7b-4173-8ed8-42c0eebadb15/sections",
+      "status": 201,
+      "at": "2026-07-07T10:32:48.250Z"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/dashboard/menus/a5a8ef26-fd7b-4173-8ed8-42c0eebadb15/sections/cb25eb69-20ee-4f20-b085-40101040b0f3/products",
+      "status": 201,
+      "at": "2026-07-07T10:32:48.274Z"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/dashboard/menus/a5a8ef26-fd7b-4173-8ed8-42c0eebadb15/assignments",
+      "status": 201,
+      "at": "2026-07-07T10:32:48.293Z"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/auth/company/login",
+      "status": 200,
+      "at": "2026-07-07T10:32:48.709Z"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/me/modules",
+      "status": 200,
+      "at": "2026-07-07T10:32:48.792Z"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/company/settings",
+      "status": 200,
+      "at": "2026-07-07T10:32:48.804Z"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/company/catalog/menu",
+      "status": 200,
+      "at": "2026-07-07T10:32:48.898Z"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/company/catalog/products",
+      "status": 404,
+      "at": "2026-07-07T10:32:48.915Z"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/company/orders",
+      "status": 201,
+      "at": "2026-07-07T10:32:49.292Z"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/company/orders",
+      "status": 200,
+      "at": "2026-07-07T10:32:49.313Z"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/company/orders/8592f1e9-d1c4-4e10-8d38-2de2204b063a",
+      "status": 200,
+      "at": "2026-07-07T10:32:49.327Z"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/dashboard/workflows",
+      "status": 200,
+      "at": "2026-07-07T10:32:49.358Z"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/dashboard/workflows/00000000-0000-4000-8000-000000000001/steps",
+      "status": 200,
+      "at": "2026-07-07T10:32:49.381Z"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/dashboard/orders/8592f1e9-d1c4-4e10-8d38-2de2204b063a/transitions",
+      "status": 200,
+      "at": "2026-07-07T10:32:49.502Z"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/dashboard/orders/8592f1e9-d1c4-4e10-8d38-2de2204b063a/notes",
+      "status": 422,
+      "at": "2026-07-07T10:32:49.509Z"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/dashboard/rules/rule-types",
+      "status": 201,
+      "at": "2026-07-07T10:32:49.531Z"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/dashboard/rules/business-rules",
+      "status": 201,
+      "at": "2026-07-07T10:32:49.555Z"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/dashboard/rules/business-rules/resolve",
+      "status": 200,
+      "at": "2026-07-07T10:32:49.579Z"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/dashboard/rules/calendars",
+      "status": 201,
+      "at": "2026-07-07T10:32:49.592Z"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/dashboard/rules/calendars/6c6a58c5-057c-4628-acc2-6457fb5b3bb1/events",
+      "status": 201,
+      "at": "2026-07-07T10:32:49.610Z"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/company/device-tokens",
+      "status": 201,
+      "at": "2026-07-07T10:32:49.636Z"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/dashboard/notification-templates",
+      "status": 201,
+      "at": "2026-07-07T10:32:49.671Z"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/company/notifications",
+      "status": 200,
+      "at": "2026-07-07T10:32:49.714Z"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/dashboard/jobs",
+      "status": 200,
+      "at": "2026-07-07T10:32:49.754Z"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/dashboard/integrations/systems",
+      "status": 201,
+      "at": "2026-07-07T10:32:49.780Z"
+    },
+    {
+      "method": "PUT",
+      "path": "/api/v1/dashboard/catalog/categories/a4ed96ac-d47b-411d-8529-dacc1dd8e95f/translations/ar",
+      "status": 404,
+      "at": "2026-07-07T10:32:49.783Z"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/dashboard/audit-logs",
+      "status": 200,
+      "at": "2026-07-07T10:32:49.810Z"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/files",
+      "status": 401,
+      "at": "2026-07-07T10:32:49.819Z"
+    }
+  ],
+  "finishedAt": "2026-07-07T10:32:49.823Z"
+}

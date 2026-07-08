@@ -1,0 +1,64 @@
+services:
+  postgres:
+    image: postgres:15-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: cloudkitchen
+      POSTGRES_PASSWORD: cloudkitchen
+      POSTGRES_DB: cloudkitchen
+    ports:
+      - '5435:5432'
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U cloudkitchen -d cloudkitchen']
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    ports:
+      - '6379:6379'
+    healthcheck:
+      test: ['CMD', 'redis-cli', 'ping']
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    ports:
+      - '3010:3000'
+    environment:
+      NODE_ENV: production
+      PORT: 3000
+      DATABASE_URL: postgresql://cloudkitchen:cloudkitchen@postgres:5432/cloudkitchen
+      JWT_COMPANY_ACCESS_SECRET: dev_company_access_secret_32chars_min
+      JWT_COMPANY_REFRESH_SECRET: dev_company_refresh_secret_32chars_min
+      JWT_DASHBOARD_ACCESS_SECRET: dev_dashboard_access_secret_32chars_min
+      JWT_DASHBOARD_REFRESH_SECRET: dev_dashboard_refresh_secret_32chars_min
+      OTP_PEPPER: dev_otp_pepper_32_characters_min
+      CORS_ORIGINS: https://api.cloud-kitchen.code-solution.org,https://company.cloud-kitchen.code-solution.org,https://dashboard.cloud-kitchen.code-solution.org,http://localhost:3000,http://localhost:5173
+      PUBLIC_API_URL: https://api.cloud-kitchen.code-solution.org
+      UPLOAD_PATH: ./uploads
+      FILE_STORAGE_PROVIDER: local
+      REDIS_ENABLED: 'false'
+      REDIS_URL: redis://redis:6379
+      LOG_LEVEL: info
+      NOTIFICATIONS_PUSH_ENABLED: 'true'
+      FIREBASE_PROJECT_ID: cloud-kitchen-27de2
+      FIREBASE_SERVICE_ACCOUNT_PATH: /app/secrets/firebase-service-account.json
+    depends_on:
+      postgres:
+        condition: service_healthy
+    volumes:
+      - ./uploads:/app/uploads
+      - ./cloud-kitchen-27de2-firebase-adminsdk-fbsvc-bafe03b145.json:/app/secrets/firebase-service-account.json:ro
+
+volumes:
+  pgdata:

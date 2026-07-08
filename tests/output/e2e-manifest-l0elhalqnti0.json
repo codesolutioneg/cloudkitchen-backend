@@ -1,0 +1,258 @@
+{
+  "runId": "l0elhalqnti0",
+  "seed": 7574870,
+  "startedAt": "2026-07-07T10:33:23.127Z",
+  "note": "Persisted test data — inspect in Postgres; rows are intentionally not deleted.",
+  "credentials": {
+    "companyUserEmail": "e2e-l0elhalqnti0-user@neglected-bell.org",
+    "companyPassword": "E2e!bYCfQY8TCfnQ9",
+    "dashboardEmail": "admin@cloudkitchen.example",
+    "dashboardPassword": "Admin@12345"
+  },
+  "entities": {
+    "dashboardUserId": null,
+    "companyId": "e8ba233a-af01-4ca9-971c-a84aa425b79c",
+    "legalName": "Cole - Keeling",
+    "approvalStatus": "approved",
+    "categoryId": "522325e1-d887-48a6-b4e5-a7f58a6faad2",
+    "productId": "7ca177ad-5774-47c9-a63c-a7f012e47034",
+    "pricingListId": "067ee912-61d8-4b51-822e-04a71c64e009",
+    "menuId": "d29fa8eb-3a9a-4b3d-ad7e-f156e6a853c0",
+    "companyUserId": "be4f20bb-e6e1-49b0-ada9-cd375f75d470",
+    "orderId": "6a169aec-e4ac-4b90-9eb1-515654554bad",
+    "orderNumber": "ORD-20260707-327D70",
+    "businessRuleId": "87c80ce7-55cd-4aef-a661-e71ac90d2e1e",
+    "jobId": "b67af356-c02a-495d-aaec-4e6160aed0a1"
+  },
+  "endpointsHit": [
+    {
+      "method": "GET",
+      "path": "/api/v1/health",
+      "status": 200,
+      "at": "2026-07-07T10:33:23.172Z"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/auth/dashboard/login",
+      "status": 200,
+      "at": "2026-07-07T10:33:23.509Z"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/company/onboarding/register",
+      "status": 201,
+      "at": "2026-07-07T10:33:24.066Z"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/dashboard/companies/e8ba233a-af01-4ca9-971c-a84aa425b79c/approve",
+      "status": 200,
+      "at": "2026-07-07T10:33:24.125Z"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/dashboard/catalog/categories",
+      "status": 201,
+      "at": "2026-07-07T10:33:24.178Z"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/dashboard/catalog/products",
+      "status": 201,
+      "at": "2026-07-07T10:33:24.210Z"
+    },
+    {
+      "method": "PUT",
+      "path": "/api/v1/dashboard/catalog/products/7ca177ad-5774-47c9-a63c-a7f012e47034/translations/ar",
+      "status": 200,
+      "at": "2026-07-07T10:33:24.260Z"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/dashboard/catalog/pricing-lists",
+      "status": 201,
+      "at": "2026-07-07T10:33:24.285Z"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/dashboard/catalog/prices",
+      "status": 422,
+      "at": "2026-07-07T10:33:24.298Z"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/dashboard/menus",
+      "status": 201,
+      "at": "2026-07-07T10:33:24.343Z"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/dashboard/menus/d29fa8eb-3a9a-4b3d-ad7e-f156e6a853c0/sections",
+      "status": 201,
+      "at": "2026-07-07T10:33:24.377Z"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/dashboard/menus/d29fa8eb-3a9a-4b3d-ad7e-f156e6a853c0/sections/1026d268-55e7-4619-a3b9-014576c2d612/products",
+      "status": 201,
+      "at": "2026-07-07T10:33:24.398Z"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/dashboard/menus/d29fa8eb-3a9a-4b3d-ad7e-f156e6a853c0/assignments",
+      "status": 201,
+      "at": "2026-07-07T10:33:24.421Z"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/auth/company/login",
+      "status": 200,
+      "at": "2026-07-07T10:33:24.963Z"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/me/modules",
+      "status": 200,
+      "at": "2026-07-07T10:33:25.088Z"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/company/settings",
+      "status": 200,
+      "at": "2026-07-07T10:33:25.108Z"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/company/catalog/menu",
+      "status": 200,
+      "at": "2026-07-07T10:33:25.185Z"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/company/catalog/products",
+      "status": 404,
+      "at": "2026-07-07T10:33:25.195Z"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/company/orders",
+      "status": 201,
+      "at": "2026-07-07T10:33:25.569Z"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/company/orders",
+      "status": 200,
+      "at": "2026-07-07T10:33:25.589Z"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/company/orders/6a169aec-e4ac-4b90-9eb1-515654554bad",
+      "status": 200,
+      "at": "2026-07-07T10:33:25.621Z"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/dashboard/workflows",
+      "status": 200,
+      "at": "2026-07-07T10:33:25.674Z"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/dashboard/workflows/00000000-0000-4000-8000-000000000001/steps",
+      "status": 200,
+      "at": "2026-07-07T10:33:25.690Z"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/dashboard/orders/6a169aec-e4ac-4b90-9eb1-515654554bad/transitions",
+      "status": 200,
+      "at": "2026-07-07T10:33:25.818Z"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/dashboard/orders/6a169aec-e4ac-4b90-9eb1-515654554bad/notes",
+      "status": 422,
+      "at": "2026-07-07T10:33:25.831Z"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/dashboard/rules/rule-types",
+      "status": 201,
+      "at": "2026-07-07T10:33:25.875Z"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/dashboard/rules/business-rules",
+      "status": 201,
+      "at": "2026-07-07T10:33:25.920Z"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/dashboard/rules/business-rules/resolve",
+      "status": 200,
+      "at": "2026-07-07T10:33:25.951Z"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/dashboard/rules/calendars",
+      "status": 201,
+      "at": "2026-07-07T10:33:25.971Z"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/dashboard/rules/calendars/72cabcf2-20f5-48d6-ae4d-8d11ccef84b9/events",
+      "status": 201,
+      "at": "2026-07-07T10:33:26.001Z"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/company/device-tokens",
+      "status": 201,
+      "at": "2026-07-07T10:33:26.032Z"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/dashboard/notification-templates",
+      "status": 201,
+      "at": "2026-07-07T10:33:26.061Z"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/company/notifications",
+      "status": 200,
+      "at": "2026-07-07T10:33:26.125Z"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/dashboard/jobs",
+      "status": 200,
+      "at": "2026-07-07T10:33:26.172Z"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/dashboard/integrations/systems",
+      "status": 201,
+      "at": "2026-07-07T10:33:26.196Z"
+    },
+    {
+      "method": "PUT",
+      "path": "/api/v1/dashboard/catalog/categories/522325e1-d887-48a6-b4e5-a7f58a6faad2/translations/ar",
+      "status": 404,
+      "at": "2026-07-07T10:33:26.205Z"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/dashboard/audit-logs",
+      "status": 200,
+      "at": "2026-07-07T10:33:26.232Z"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/files",
+      "status": 401,
+      "at": "2026-07-07T10:33:26.242Z"
+    }
+  ],
+  "finishedAt": "2026-07-07T10:33:26.247Z"
+}
