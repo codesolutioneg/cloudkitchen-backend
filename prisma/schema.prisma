@@ -136,6 +136,7 @@ model Company {
   pricing_list_assignments CompanyPricingListAssignment[]
   dashboard_assignments    DashboardUserCompanyAssignment[]
   company_roles            CompanyRole[]
+  meal_plans               MealPlan[]
 
   @@index([status])
   @@index([approval_status])
@@ -753,6 +754,8 @@ model Product {
   prices                ProductPrice[]
   catalog_menu_products CatalogMenuProduct[]
   order_items           OrderItem[]
+  nutrition             ProductNutrition?
+  meal_plan_items       MealPlanItem[]
 
   @@index([category_id])
   @@map("products")
@@ -795,9 +798,10 @@ model ProductVariant {
   is_default       Boolean @default(false)
   is_active        Boolean @default(true)
 
-  product     Product        @relation(fields: [product_id], references: [id], onDelete: Cascade)
-  order_items OrderItem[]
-  prices      ProductPrice[]
+  product         Product        @relation(fields: [product_id], references: [id], onDelete: Cascade)
+  order_items     OrderItem[]
+  prices          ProductPrice[]
+  meal_plan_items MealPlanItem[]
 
   @@index([product_id])
   @@map("product_variants")
@@ -877,6 +881,7 @@ model ProductPricingList {
 
   prices              ProductPrice[]
   company_assignments CompanyPricingListAssignment[]
+  meal_plans          MealPlan[]
 
   @@map("product_pricing_lists")
 }
@@ -928,6 +933,7 @@ model CatalogMenu {
 
   sections    CatalogMenuSection[]
   assignments MenuAssignment[]
+  meal_plans  MealPlan[]
 
   @@map("catalog_menus")
 }
@@ -2000,4 +2006,154 @@ model CompanyUserRole {
 
   @@id([company_user_id, company_role_id])
   @@map("company_user_roles")
+}
+
+// ============================================================================
+// §31: MODULE: Budget Meal Planning (factory / corporate catering)
+//
+// Corporate clients (factories, plants, site canteens) buy meals per head per
+// day against a fixed budget and a nutrition brief: "1200 kcal, at least 45 g
+// protein, no more than 130 g carbs, under 22 SAR a head". These tables hold
+// the brief, the generated plan, and the per-day component breakdown.
+//
+// Nutrition graduates out of `products.attributes` jsonb into a dedicated
+// table because the planner has to filter and sort on protein/carbs/calories
+// the exact "query patterns stabilized" trigger the schema notes call out.
+// ============================================================================
+
+model ProductNutrition {
+  id             String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  product_id     String   @unique @db.Uuid
+  component_type String   @default("other") @db.VarChar(30) // protein | carb | vegetable | salad | soup | side | drink | dessert | other
+  serving_size_g Int?
+  calories_kcal  Decimal  @default(0) @db.Decimal(10, 2)
+  protein_g      Decimal  @default(0) @db.Decimal(10, 2)
+  carbs_g        Decimal  @default(0) @db.Decimal(10, 2)
+  fat_g          Decimal  @default(0) @db.Decimal(10, 2)
+  fiber_g        Decimal? @db.Decimal(10, 2)
+  sodium_mg      Decimal? @db.Decimal(10, 2)
+  allergens      String[] @db.VarChar(60)
+  ingredients    String?
+  source         String?  @db.VarChar(60) // manual | supplier | lab
+
+  created_at      DateTime @default(now()) @db.Timestamptz(6)
+  updated_at      DateTime @updatedAt @db.Timestamptz(6)
+  updated_by_type String?  @db.VarChar(20)
+  updated_by_id   String?  @db.Uuid
+
+  product Product @relation(fields: [product_id], references: [id], onDelete: Cascade)
+
+  @@index([component_type])
+  @@map("product_nutrition")
+}
+
+model MealPlan {
+  id          String  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  company_id  String  @db.Uuid
+  name        String  @db.VarChar(180)
+  description String?
+  status      String  @default("draft") @db.VarChar(20) // draft | generated | approved | archived
+
+  start_date DateTime @db.Date
+  end_date   DateTime @db.Date
+  headcount  Int      @default(1)
+
+  budget_per_meal Decimal @db.Decimal(12, 2)
+  currency        String  @db.Char(3)
+  pricing_list_id String? @db.Uuid
+  source_menu_id  String? @db.Uuid
+
+  // Nutrition brief: all optional; only the ones set are enforced.
+  min_calories_kcal Decimal? @db.Decimal(10, 2)
+  max_calories_kcal Decimal? @db.Decimal(10, 2)
+  min_protein_g     Decimal? @db.Decimal(10, 2)
+  max_protein_g     Decimal? @db.Decimal(10, 2)
+  min_carbs_g       Decimal? @db.Decimal(10, 2)
+  max_carbs_g       Decimal? @db.Decimal(10, 2)
+  max_fat_g         Decimal? @db.Decimal(10, 2)
+
+  // [{ componentType, quantity }]: the shape of one meal.
+  slot_spec           Json
+  exclude_allergens   String[] @db.VarChar(60)
+  variety_window_days Int      @default(2)
+
+  generated_at      DateTime? @db.Timestamptz(6)
+  is_feasible       Boolean   @default(false)
+  warnings          Json?
+  total_cost        Decimal   @default(0) @db.Decimal(14, 2)
+  avg_cost_per_meal Decimal   @default(0) @db.Decimal(12, 2)
+  avg_calories_kcal Decimal   @default(0) @db.Decimal(10, 2)
+  avg_protein_g     Decimal   @default(0) @db.Decimal(10, 2)
+  avg_carbs_g       Decimal   @default(0) @db.Decimal(10, 2)
+  avg_fat_g         Decimal   @default(0) @db.Decimal(10, 2)
+  approved_at       DateTime? @db.Timestamptz(6)
+  approved_by       String?   @db.Uuid
+
+  created_at      DateTime  @default(now()) @db.Timestamptz(6)
+  updated_at      DateTime  @updatedAt @db.Timestamptz(6)
+  deleted_at      DateTime? @db.Timestamptz(6)
+  created_by_type String?   @db.VarChar(20)
+  created_by_id   String?   @db.Uuid
+  updated_by_type String?   @db.VarChar(20)
+  updated_by_id   String?   @db.Uuid
+  is_deleted      Boolean   @default(false)
+  version         Int       @default(1)
+
+  company      Company             @relation(fields: [company_id], references: [id], onDelete: Cascade)
+  pricing_list ProductPricingList? @relation(fields: [pricing_list_id], references: [id], onDelete: SetNull)
+  source_menu  CatalogMenu?        @relation(fields: [source_menu_id], references: [id], onDelete: SetNull)
+  days         MealPlanDay[]
+
+  @@index([company_id, status])
+  @@index([start_date])
+  @@map("meal_plans")
+}
+
+model MealPlanDay {
+  id           String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  meal_plan_id String   @db.Uuid
+  plan_date    DateTime @db.Date
+  sort_order   Int      @default(0)
+
+  cost_per_head Decimal @default(0) @db.Decimal(12, 2)
+  total_cost    Decimal @default(0) @db.Decimal(14, 2)
+  calories_kcal Decimal @default(0) @db.Decimal(10, 2)
+  protein_g     Decimal @default(0) @db.Decimal(10, 2)
+  carbs_g       Decimal @default(0) @db.Decimal(10, 2)
+  fat_g         Decimal @default(0) @db.Decimal(10, 2)
+  is_feasible   Boolean @default(false)
+  warnings      Json?
+
+  meal_plan MealPlan       @relation(fields: [meal_plan_id], references: [id], onDelete: Cascade)
+  items     MealPlanItem[]
+
+  @@unique([meal_plan_id, plan_date])
+  @@index([meal_plan_id])
+  @@map("meal_plan_days")
+}
+
+model MealPlanItem {
+  id               String  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  meal_plan_day_id String  @db.Uuid
+  product_id       String  @db.Uuid
+  variant_id       String? @db.Uuid
+  component_type   String  @db.VarChar(30)
+  quantity         Int     @default(1)
+  unit_price       Decimal @db.Decimal(12, 2)
+  line_total       Decimal @db.Decimal(12, 2)
+  calories_kcal    Decimal @default(0) @db.Decimal(10, 2)
+  protein_g        Decimal @default(0) @db.Decimal(10, 2)
+  carbs_g          Decimal @default(0) @db.Decimal(10, 2)
+  fat_g            Decimal @default(0) @db.Decimal(10, 2)
+  // Locked items are chosen by a human and survive a regenerate.
+  is_locked        Boolean @default(false)
+  sort_order       Int     @default(0)
+
+  day     MealPlanDay     @relation(fields: [meal_plan_day_id], references: [id], onDelete: Cascade)
+  product Product         @relation(fields: [product_id], references: [id], onDelete: Restrict)
+  variant ProductVariant? @relation(fields: [variant_id], references: [id], onDelete: SetNull)
+
+  @@index([meal_plan_day_id])
+  @@index([product_id])
+  @@map("meal_plan_items")
 }
