@@ -70,6 +70,24 @@ prisma/
   schema.prisma       # Database schema (source of truth)
 ```
 
+## Budget meal planning
+
+Corporate clients (factory canteens) buy meals per head per day against a fixed
+budget and a nutrition brief. The planner picks one product per meal component
+so a day stays inside the budget while hitting protein, carb and energy targets.
+
+- Give products macros first: `PUT /api/v1/dashboard/catalog/products/{id}/nutrition`.
+  Products without nutrition are invisible to the planner.
+- Create a brief (`POST /api/v1/dashboard/meal-plans`), then `POST .../generate`.
+- `POST /api/v1/dashboard/meal-plans/preview` solves a brief without saving it.
+- Budget outranks the nutrition targets: an unreachable brief returns the
+  cheapest compliant plan plus warnings, never a silent overspend.
+- Lock an item to keep a human pick across a regenerate. Approved plans are
+  immutable; duplicate to change one.
+
+The solver lives in `src/engines/mealPlanOptimizer.ts` and is a pure,
+deterministic function, so the same brief always yields the same plan.
+
 ## Documentation
 
 - Master prompt: `CLOUD_KITCHEN_B2B_BACKEND_MASTER_PROMPT.md`

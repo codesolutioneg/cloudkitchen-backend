@@ -368,6 +368,40 @@
 
 ---
 
+## Phase 16 - Budget Meal Planning (factory / corporate catering)
+
+Corporate clients buy meals per head per day against a fixed budget and a
+nutrition brief. This phase adds structured product nutrition, a deterministic
+planner, and the dashboard screens to drive both.
+
+### Batch 16.1 - Nutrition data
+- [x] `product_nutrition` table (component type, macros, allergens, serving size), 1:1 with `products`
+- [x] `GET/PUT/DELETE /dashboard/catalog/products/{id}/nutrition` with allergens folded to lower case
+- [x] Nutrition tab on the dashboard product detail page
+
+### Batch 16.2 - Planner engine
+- [x] `src/engines/mealPlanOptimizer.ts`: pure, deterministic, no I/O
+- [x] Cheapest feasible start then steepest-descent hill climbing on one penalty function
+- [x] Budget weighted above nutrition targets, so a plan never silently overspends
+- [x] Variety window, allergen exclusion, locked picks, per-day and per-plan warnings
+- [x] `tests/unit/mealPlanOptimizer.test.ts` - 15 unit tests
+
+### Batch 16.3 - Meal plan module
+- [x] `meal_plans` / `meal_plan_days` / `meal_plan_items` tables
+- [x] CRUD, `preview`, `generate`, `approve`, `duplicate`, `archive`, per-day item add/update/remove
+- [x] `GET /dashboard/meal-plans/candidates` with effective company price and protein-per-cost
+- [x] Company scope enforced on every read and write, not only on list
+- [x] Approved plans are immutable; duplicate to change
+- [x] `tests/integration/meal-plans.test.ts` - 13 integration tests
+
+### Batch 16.4 - Dashboard, seed, docs
+- [x] `/dashboard/meal-plans` list + plan builder (daily menus, brief editor, candidate explorer)
+- [x] Page + role permissions seeded; Sales creates, Operations approves
+- [x] Demo seed generates nutrition for every product and a draft brief per company
+- [x] **333 tests passing**
+
+---
+
 ## Deviation Log
 
 - **Phase 0 / Batch 0.3:** Full `audit_logs` diff-based Prisma extension intentionally deferred to Phase 10 per master prompt §24.2 dependency order and plan. Phase 0 ships soft-delete, tenant-scoping, and actor-stamping only.
@@ -383,3 +417,7 @@
 - **Phase 14 / OpenAPI:** Supplemental path registrations live in `registerMissingPaths.ts` (imported via `bootstrap.ts`) rather than duplicating every `registerPath` in co-located schema files — keeps §21.6 gate green with minimal drift.
 - **Phase 14 / E2E:** Full lifecycle test persists all created rows; inspect via `tests/output/latest-e2e-manifest.json` + Prisma Studio.
 - **Phase 15 / Fulfillment:** Delivery is in-house fleet (not marketplace couriers). QR proof scanned by driver confirms `delivered`; company user holds QR payload via `/fulfillment-qr` only.
+- **Phase 16 / Nutrition:** macros graduate out of `products.attributes` jsonb into `product_nutrition` because the planner filters and sorts on protein/carbs/calories, which is the "query patterns stabilized" trigger the schema notes call out.
+- **Phase 16 / Planner:** the optimizer is a pure function fed by the service layer (candidates, prices, targets) so plans are reproducible and unit-testable without a database.
+- **Phase 16 / Planner:** budget carries a heavier penalty weight than nutrition targets. An unreachable brief returns the cheapest compliant combination plus a warning rather than quietly overspending a signed-off budget.
+- **Phase 16 / OpenAPI:** twelve pre-existing catalog/companies/RBAC routes had no `registerPath` and were failing the §21.6 gate before this phase; they are registered in `registerMissingPaths.ts` so the gate is green again.
