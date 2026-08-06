@@ -100,3 +100,18 @@ reg('delete', '/api/v1/dashboard/feature-flags/{id}', feat, 'Delete feature flag
 reg('patch', '/api/v1/dashboard/dashboard-pages/{id}', feat, 'Update dashboard page');
 reg('delete', '/api/v1/dashboard/dashboard-pages/{id}', feat, 'Delete dashboard page');
 reg('get', '/api/v1/dashboard/roles/{roleId}/features', feat, 'List role features');
+// ── catalog sub-resources: read + media routes that had no registerPath ────
+reg('get', '/api/v1/dashboard/catalog/products/{id}/variants', cat, 'List product variants');
+reg('get', '/api/v1/dashboard/catalog/products/{id}/option-groups', cat, 'List product option groups');
+reg('get', '/api/v1/dashboard/catalog/products/{id}/availability', cat, 'List product availability');
+reg('get', '/api/v1/dashboard/catalog/products/{id}/tags', cat, 'List product tags');
+reg('get', '/api/v1/dashboard/catalog/products/{id}/media', cat, 'List product media');
+reg('post', '/api/v1/dashboard/catalog/products/{id}/image', cat, 'Upload product image');
+reg('put', '/api/v1/dashboard/catalog/products/{id}/image', cat, 'Set product image URL');
+reg('delete', '/api/v1/dashboard/catalog/products/{id}/media/{mediaId}', cat, 'Delete product media');
+
+// ── dashboard companies / RBAC reads ──────────────────────────────────────
+reg('get', '/api/v1/dashboard/companies/{id}', ['Companies'], 'Get company');
+reg('get', '/api/v1/dashboard/companies/{id}/documents', ['Companies'], 'List company documents');
+reg('get', '/api/v1/dashboard/roles/{id}', ['RBAC'], 'Get role');
+reg('get', '/api/v1/dashboard/users', ['RBAC'], 'List dashboard users');
