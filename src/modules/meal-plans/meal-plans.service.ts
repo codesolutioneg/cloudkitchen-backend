@@ -13,6 +13,7 @@ import { menuResolver } from '../../engines/menuResolver';
 import {
   buildMealPlan,
   enumerateDates,
+  evaluateDayWarnings,
   type CandidateProduct,
   type ComponentType,
   type LockedPick,
@@ -23,6 +24,12 @@ import {
 } from '../../engines/mealPlanOptimizer';
 
 const PLAN_MAX_DAYS = 92;
+
+/** A solver candidate plus the catalog fields the dashboard listing shows. */
+interface CatalogCandidate extends CandidateProduct {
+  categoryId: string;
+  currency: string;
+}
 
 type PlanStatus = 'draft' | 'generated' | 'approved' | 'archived';
 
@@ -172,7 +179,7 @@ export async function resolveCandidates(
   sourceMenuId?: string | null,
   pricingListId?: string | null,
   atInstant = new Date(),
-): Promise<CandidateProduct[]> {
+): Promise<CatalogCandidate[]> {
   let productFilter: Prisma.ProductWhereInput = {
     is_deleted: false,
     is_active: true,
@@ -222,6 +229,8 @@ export async function resolveCandidates(
         carbsG: Number(nutrition.carbs_g),
         fatG: Number(nutrition.fat_g),
         allergens: nutrition.allergens,
+        categoryId: product.category_id,
+        currency: product.currency,
       },
     ];
   });
@@ -241,22 +250,15 @@ export async function listCandidates(input: {
     input.pricingListId ?? null,
   );
 
-  const productIds = candidates.map((candidate) => candidate.productId);
-  const products = await prisma.product.findMany({
-    where: { id: { in: productIds } },
-    select: { id: true, category_id: true, currency: true },
-  });
-  const meta = new Map(products.map((product) => [product.id, product]));
-
   return candidates
     .filter((candidate) => !input.componentType || candidate.componentType === input.componentType)
     .map((candidate) => ({
       productId: candidate.productId,
       name: candidate.name,
-      categoryId: meta.get(candidate.productId)?.category_id ?? '',
+      categoryId: candidate.categoryId,
       componentType: candidate.componentType,
       unitPrice: candidate.unitPrice.toFixed(2),
-      currency: meta.get(candidate.productId)?.currency ?? '',
+      currency: candidate.currency,
       caloriesKcal: candidate.caloriesKcal.toFixed(2),
       proteinG: candidate.proteinG.toFixed(2),
       carbsG: candidate.carbsG.toFixed(2),
@@ -810,81 +812,54 @@ async function recalculateDay(planId: string, dayId: string): Promise<void> {
     },
   );
 
-  const warnings: PlanWarning[] = [];
-  const date = isoDate(day.plan_date);
-  if (totals.cost.greaterThan(plan.budget_per_meal)) {
-    warnings.push({
-      code: 'budget_exceeded',
-      date,
-      message: `Day cost ${totals.cost.toFixed(2)} is over the ${plan.budget_per_meal.toFixed(2)} per-head budget.`,
-    });
-  }
-  if (plan.min_protein_g && totals.protein.lessThan(plan.min_protein_g)) {
-    warnings.push({
-      code: 'protein_below_target',
-      date,
-      message: `Protein ${totals.protein.toFixed(2)} g is below the ${plan.min_protein_g.toFixed(2)} g floor.`,
-    });
-  }
-  if (plan.max_carbs_g && totals.carbs.greaterThan(plan.max_carbs_g)) {
-    warnings.push({
-      code: 'carbs_above_target',
-      date,
-      message: `Carbs ${totals.carbs.toFixed(2)} g exceed the ${plan.max_carbs_g.toFixed(2)} g ceiling.`,
-    });
-  }
-  if (plan.max_calories_kcal && totals.calories.greaterThan(plan.max_calories_kcal)) {
-    warnings.push({
-      code: 'calories_above_target',
-      date,
-      message: `Energy ${totals.calories.toFixed(2)} kcal is above the ${plan.max_calories_kcal.toFixed(2)} kcal ceiling.`,
-    });
-  }
-  if (plan.min_calories_kcal && totals.calories.lessThan(plan.min_calories_kcal)) {
-    warnings.push({
-      code: 'calories_below_target',
-      date,
-      message: `Energy ${totals.calories.toFixed(2)} kcal is below the ${plan.min_calories_kcal.toFixed(2)} kcal floor.`,
-    });
-  }
-  if (plan.max_fat_g && totals.fat.greaterThan(plan.max_fat_g)) {
-    warnings.push({
-      code: 'fat_above_target',
-      date,
-      message: `Fat ${totals.fat.toFixed(2)} g exceeds the ${plan.max_fat_g.toFixed(2)} g ceiling.`,
-    });
-  }
-
-  await prisma.mealPlanDay.update({
-    where: { id: dayId },
-    data: {
-      cost_per_head: totals.cost,
-      total_cost: totals.cost.times(plan.headcount),
-      calories_kcal: totals.calories,
-      protein_g: totals.protein,
-      carbs_g: totals.carbs,
-      fat_g: totals.fat,
-      is_feasible: warnings.length === 0 && day.items.length > 0,
-      warnings: warnings as unknown as Prisma.InputJsonValue,
+  // Same rule set the solver uses, so a hand-edited day is judged identically.
+  const warnings = evaluateDayWarnings(
+    isoDate(day.plan_date),
+    {
+      cost: Number(totals.cost),
+      caloriesKcal: Number(totals.calories),
+      proteinG: Number(totals.protein),
+      carbsG: Number(totals.carbs),
+      fatG: Number(totals.fat),
     },
-  });
+    Number(plan.budget_per_meal),
+    targetsOf(plan),
+  );
 
-  const days = await prisma.mealPlanDay.findMany({ where: { meal_plan_id: planId } });
-  const dayCount = Math.max(1, days.length);
-  const sum = (pick: (d: (typeof days)[number]) => Decimal) =>
-    days.reduce((acc, entry) => acc.plus(pick(entry)), new Decimal(0));
+  // Day rollup and plan rollup move together: a crash between the two would
+  // leave the plan averages disagreeing with the days they are averaging.
+  await prisma.$transaction(async (tx) => {
+    await tx.mealPlanDay.update({
+      where: { id: dayId },
+      data: {
+        cost_per_head: totals.cost,
+        total_cost: totals.cost.times(plan.headcount),
+        calories_kcal: totals.calories,
+        protein_g: totals.protein,
+        carbs_g: totals.carbs,
+        fat_g: totals.fat,
+        is_feasible: warnings.length === 0 && day.items.length > 0,
+        warnings: warnings as unknown as Prisma.InputJsonValue,
+      },
+    });
 
-  await prisma.mealPlan.update({
-    where: { id: planId },
-    data: {
-      total_cost: sum((d) => d.total_cost),
-      avg_cost_per_meal: sum((d) => d.cost_per_head).dividedBy(dayCount).toDecimalPlaces(2),
-      avg_calories_kcal: sum((d) => d.calories_kcal).dividedBy(dayCount).toDecimalPlaces(2),
-      avg_protein_g: sum((d) => d.protein_g).dividedBy(dayCount).toDecimalPlaces(2),
-      avg_carbs_g: sum((d) => d.carbs_g).dividedBy(dayCount).toDecimalPlaces(2),
-      avg_fat_g: sum((d) => d.fat_g).dividedBy(dayCount).toDecimalPlaces(2),
-      is_feasible: days.every((entry) => entry.is_feasible),
-    },
+    const days = await tx.mealPlanDay.findMany({ where: { meal_plan_id: planId } });
+    const dayCount = Math.max(1, days.length);
+    const sum = (pick: (d: (typeof days)[number]) => Decimal) =>
+      days.reduce((acc, entry) => acc.plus(pick(entry)), new Decimal(0));
+
+    await tx.mealPlan.update({
+      where: { id: planId },
+      data: {
+        total_cost: sum((d) => d.total_cost),
+        avg_cost_per_meal: sum((d) => d.cost_per_head).dividedBy(dayCount).toDecimalPlaces(2),
+        avg_calories_kcal: sum((d) => d.calories_kcal).dividedBy(dayCount).toDecimalPlaces(2),
+        avg_protein_g: sum((d) => d.protein_g).dividedBy(dayCount).toDecimalPlaces(2),
+        avg_carbs_g: sum((d) => d.carbs_g).dividedBy(dayCount).toDecimalPlaces(2),
+        avg_fat_g: sum((d) => d.fat_g).dividedBy(dayCount).toDecimalPlaces(2),
+        is_feasible: days.every((entry) => entry.is_feasible),
+      },
+    });
   });
 }
 

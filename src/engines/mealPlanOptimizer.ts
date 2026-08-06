@@ -245,6 +245,46 @@ function hasExcludedAllergen(candidate: CandidateProduct, excluded: Set<string>)
   return candidate.allergens.some((allergen) => excluded.has(allergen.trim().toLowerCase()));
 }
 
+export interface DayTotals {
+  cost: number;
+  caloriesKcal: number;
+  proteinG: number;
+  carbsG: number;
+  fatG: number;
+}
+
+/**
+ * The single definition of "is this day within the brief".
+ *
+ * Both the solver and the manual-edit path run this, so a day edited by hand
+ * is judged by exactly the same rules as a generated one.
+ *
+ * @param date ISO date the warnings belong to.
+ * @param totals Day totals in currency units and grams.
+ * @param budgetPerMeal Per-head money ceiling.
+ * @param targets The nutrition brief.
+ * @returns One warning per breached constraint; empty when the day is on target.
+ */
+export function evaluateDayWarnings(
+  date: string,
+  totals: DayTotals,
+  budgetPerMeal: number,
+  targets: NutritionTargets,
+): PlanWarning[] {
+  return buildDayWarnings(
+    date,
+    {
+      costCents: toCents(totals.cost),
+      calories: totals.caloriesKcal,
+      protein: totals.proteinG,
+      carbs: totals.carbsG,
+      fat: totals.fatG,
+    },
+    toCents(budgetPerMeal),
+    targets,
+  );
+}
+
 function buildDayWarnings(
   date: string,
   totals: Totals,
@@ -257,7 +297,7 @@ function buildDayWarnings(
     warnings.push({
       code: 'budget_exceeded',
       date,
-      message: `Cheapest compliant combination costs ${fromCents(totals.costCents).toFixed(2)}, over the ${fromCents(budgetPerMealCents).toFixed(2)} per-head budget.`,
+      message: `Day cost ${fromCents(totals.costCents).toFixed(2)} is over the ${fromCents(budgetPerMealCents).toFixed(2)} per-head budget.`,
     });
   }
   if (isFiniteNumber(targets.minProteinG) && totals.protein < targets.minProteinG) {
@@ -532,5 +572,3 @@ export function enumerateDates(startDate: string, endDate: string, maxDays = 92)
   }
   return dates;
 }
-
-export const mealPlanOptimizer = { buildMealPlan, enumerateDates };

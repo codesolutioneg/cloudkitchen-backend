@@ -350,6 +350,32 @@ describe('Budget meal planning', () => {
     expect(Number(afterDay.costPerHead)).toBeCloseTo(Number(day.costPerHead), 2);
   });
 
+  it('judges a hand-edited day by the same rules as a generated one', async () => {
+    const created = await createPlan({ maxProteinG: 60, minProteinG: 45 });
+    const planId = created.body.data.id as string;
+
+    const generated = await request(app)
+      .post(`/api/v1/dashboard/meal-plans/${planId}/generate`)
+      .set(bearer(token))
+      .send({});
+    const day = generated.body.data.days[0];
+    expect(day.isFeasible).toBe(true);
+
+    // The protein ceiling is only enforced by the solver's rule set; a manual
+    // add has to be measured against it too.
+    const added = await request(app)
+      .post(`/api/v1/dashboard/meal-plans/${planId}/days/${day.id}/items`)
+      .set(bearer(token))
+      .send({ productId: products.richChicken!.id, componentType: 'side', quantity: 1 });
+
+    expect(added.status).toBe(201);
+    expect(Number(added.body.data.proteinG)).toBeGreaterThan(60);
+    expect(added.body.data.warnings.map((w: { code: string }) => w.code)).toContain(
+      'protein_above_target',
+    );
+    expect(added.body.data.isFeasible).toBe(false);
+  });
+
   it('merges a repeat product into the existing line instead of duplicating it', async () => {
     const created = await createPlan();
     const planId = created.body.data.id as string;

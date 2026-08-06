@@ -8,3 +8,4 @@ uploads/
 cloud-kitchen-*.json
 *.log
 .DS_Store
+.jez/
