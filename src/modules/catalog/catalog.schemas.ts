@@ -332,3 +332,98 @@ registry.registerPath({
   },
   responses: { 201: { description: 'Assignment created' } },
 });
+
+// ── Product nutrition (§31, feeds the budget meal planner) ───────────────────
+
+export const nutritionComponentTypes = [
+  'protein',
+  'carb',
+  'vegetable',
+  'salad',
+  'soup',
+  'side',
+  'drink',
+  'dessert',
+  'other',
+] as const;
+
+const macro = z.number().nonnegative().max(100000);
+
+export const upsertNutritionSchema = z.object({
+  componentType: z.enum(nutritionComponentTypes),
+  servingSizeG: z.number().int().min(1).max(100000).nullable().optional(),
+  caloriesKcal: macro,
+  proteinG: macro,
+  carbsG: macro,
+  fatG: macro,
+  fiberG: macro.nullable().optional(),
+  sodiumMg: macro.nullable().optional(),
+  allergens: z.array(z.string().min(1).max(60)).max(30).optional(),
+  ingredients: z.string().max(4000).nullable().optional(),
+  source: z.string().max(60).nullable().optional(),
+});
+
+export const productNutritionSchema = z
+  .object({
+    productId: z.string().uuid(),
+    componentType: z.string(),
+    servingSizeG: z.number().int().nullable(),
+    caloriesKcal: z.string(),
+    proteinG: z.string(),
+    carbsG: z.string(),
+    fatG: z.string(),
+    fiberG: z.string().nullable(),
+    sodiumMg: z.string().nullable(),
+    allergens: z.array(z.string()),
+    ingredients: z.string().nullable(),
+    source: z.string().nullable(),
+    updatedAt: z.string(),
+  })
+  .openapi('ProductNutrition');
+
+registry.registerPath({
+  method: 'get',
+  path: '/api/v1/dashboard/catalog/products/{id}/nutrition',
+  tags: ['Catalog'],
+  summary: 'Get product nutrition',
+  security: [{ dashboardBearerAuth: [] }],
+  request: { params: idParamsSchema },
+  responses: {
+    200: {
+      description: 'Product nutrition',
+      content: {
+        'application/json': {
+          schema: SuccessEnvelopeSchema(productNutritionSchema.nullable()),
+        },
+      },
+    },
+  },
+});
+
+registry.registerPath({
+  method: 'put',
+  path: '/api/v1/dashboard/catalog/products/{id}/nutrition',
+  tags: ['Catalog'],
+  summary: 'Upsert product nutrition',
+  security: [{ dashboardBearerAuth: [] }],
+  request: {
+    params: idParamsSchema,
+    body: { content: { 'application/json': { schema: upsertNutritionSchema } } },
+  },
+  responses: {
+    200: {
+      description: 'Nutrition saved',
+      content: { 'application/json': { schema: SuccessEnvelopeSchema(productNutritionSchema) } },
+    },
+  },
+});
+
+registry.registerPath({
+  method: 'delete',
+  path: '/api/v1/dashboard/catalog/products/{id}/nutrition',
+  tags: ['Catalog'],
+  summary: 'Delete product nutrition',
+  security: [{ dashboardBearerAuth: [] }],
+  request: { params: idParamsSchema },
+  responses: { 204: { description: 'Nutrition removed' } },
+});

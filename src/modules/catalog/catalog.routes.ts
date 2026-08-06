@@ -29,6 +29,7 @@ import {
   updateOptionGroupSchema,
   updateProductSchema,
   updateVariantSchema,
+  upsertNutritionSchema,
   upsertTranslationSchema,
   variantIdParamsSchema,
 } from './catalog.schemas';
@@ -257,6 +258,29 @@ router.delete(
   canEditCatalog,
   validate(mediaIdParamsSchema, 'params'),
   asyncHandler(controller.deleteProductMedia),
+);
+
+router.get(
+  '/dashboard/catalog/products/:id/nutrition',
+  dashAuth,
+  canViewCatalog,
+  validate(idParamsSchema, 'params'),
+  asyncHandler(controller.getProductNutrition),
+);
+router.put(
+  '/dashboard/catalog/products/:id/nutrition',
+  dashAuth,
+  canEditCatalog,
+  validate(idParamsSchema, 'params'),
+  validate(upsertNutritionSchema),
+  asyncHandler(controller.upsertProductNutrition),
+);
+router.delete(
+  '/dashboard/catalog/products/:id/nutrition',
+  dashAuth,
+  canDeleteCatalog,
+  validate(idParamsSchema, 'params'),
+  asyncHandler(controller.deleteProductNutrition),
 );
 
 router.get(

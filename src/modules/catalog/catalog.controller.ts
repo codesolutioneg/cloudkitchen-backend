@@ -160,3 +160,16 @@ export async function deleteProductMedia(req: Request, res: Response): Promise<v
   await imageService.deleteProductMedia(req.params.id!, req.params.mediaId!);
   res.status(204).send();
 }
+
+export async function getProductNutrition(req: Request, res: Response): Promise<void> {
+  sendSuccess(res, await service.getProductNutrition(req.params.id!));
+}
+
+export async function upsertProductNutrition(req: Request, res: Response): Promise<void> {
+  sendSuccess(res, await service.upsertProductNutrition(req.params.id!, req.body));
+}
+
+export async function deleteProductNutrition(req: Request, res: Response): Promise<void> {
+  await service.deleteProductNutrition(req.params.id!);
+  res.status(204).send();
+}

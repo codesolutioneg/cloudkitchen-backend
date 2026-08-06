@@ -1003,3 +1003,107 @@ export async function getCompanyCatalogMenu() {
     sections,
   };
 }
+
+// ── Product nutrition (§31) ───────────────────────────────────────────────────
+
+function serializeNutrition(nutrition: {
+  product_id: string;
+  component_type: string;
+  serving_size_g: number | null;
+  calories_kcal: Prisma.Decimal;
+  protein_g: Prisma.Decimal;
+  carbs_g: Prisma.Decimal;
+  fat_g: Prisma.Decimal;
+  fiber_g: Prisma.Decimal | null;
+  sodium_mg: Prisma.Decimal | null;
+  allergens: string[];
+  ingredients: string | null;
+  source: string | null;
+  updated_at: Date;
+}) {
+  return {
+    productId: nutrition.product_id,
+    componentType: nutrition.component_type,
+    servingSizeG: nutrition.serving_size_g,
+    caloriesKcal: nutrition.calories_kcal.toString(),
+    proteinG: nutrition.protein_g.toString(),
+    carbsG: nutrition.carbs_g.toString(),
+    fatG: nutrition.fat_g.toString(),
+    fiberG: nutrition.fiber_g?.toString() ?? null,
+    sodiumMg: nutrition.sodium_mg?.toString() ?? null,
+    allergens: nutrition.allergens,
+    ingredients: nutrition.ingredients,
+    source: nutrition.source,
+    updatedAt: nutrition.updated_at.toISOString(),
+  };
+}
+
+async function getProductOrThrow(productId: string) {
+  const product = await prisma.product.findFirst({
+    where: { id: productId, is_deleted: false },
+    select: { id: true },
+  });
+  if (!product) {
+    throw new NotFoundError('Product not found');
+  }
+  return product;
+}
+
+export async function getProductNutrition(productId: string) {
+  await getProductOrThrow(productId);
+  const nutrition = await prisma.productNutrition.findUnique({
+    where: { product_id: productId },
+  });
+  return nutrition ? serializeNutrition(nutrition) : null;
+}
+
+export async function upsertProductNutrition(
+  productId: string,
+  input: {
+    componentType: string;
+    servingSizeG?: number | null;
+    caloriesKcal: number;
+    proteinG: number;
+    carbsG: number;
+    fatG: number;
+    fiberG?: number | null;
+    sodiumMg?: number | null;
+    allergens?: string[];
+    ingredients?: string | null;
+    source?: string | null;
+  },
+) {
+  await getProductOrThrow(productId);
+  const actor = getRequestActor();
+
+  const values = {
+    component_type: input.componentType,
+    serving_size_g: input.servingSizeG ?? null,
+    calories_kcal: new Prisma.Decimal(input.caloriesKcal),
+    protein_g: new Prisma.Decimal(input.proteinG),
+    carbs_g: new Prisma.Decimal(input.carbsG),
+    fat_g: new Prisma.Decimal(input.fatG),
+    fiber_g: input.fiberG === undefined || input.fiberG === null ? null : new Prisma.Decimal(input.fiberG),
+    sodium_mg:
+      input.sodiumMg === undefined || input.sodiumMg === null ? null : new Prisma.Decimal(input.sodiumMg),
+    // Allergens are matched case-insensitively by the planner; store them folded.
+    allergens: (input.allergens ?? []).map((allergen) => allergen.trim().toLowerCase()),
+    ingredients: input.ingredients ?? null,
+    source: input.source ?? 'manual',
+    updated_by_type: actor?.type ?? null,
+    updated_by_id: actor?.id ?? null,
+  };
+
+  const nutrition = await prisma.productNutrition.upsert({
+    where: { product_id: productId },
+    create: { product_id: productId, ...values },
+    update: values,
+  });
+
+  return serializeNutrition(nutrition);
+}
+
+export async function deleteProductNutrition(productId: string) {
+  await getProductOrThrow(productId);
+  await prisma.productNutrition.deleteMany({ where: { product_id: productId } });
+}
