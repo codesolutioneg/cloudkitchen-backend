@@ -45,6 +45,33 @@ export async function resolveEffectiveMenu(
 }
 
 /**
+ * Which pricing list applies to a company right now: an active company
+ * assignment wins over the platform default list (§13).
+ */
+export async function resolveEffectivePricingList(
+  companyId: string,
+  atInstant = new Date(),
+): Promise<{ pricingListId?: string; source: ResolvedPrice['source'] }> {
+  const companyAssignment = await prisma.companyPricingListAssignment.findFirst({
+    where: {
+      company_id: companyId,
+      effective_from: { lte: atInstant },
+      OR: [{ effective_to: null }, { effective_to: { gt: atInstant } }],
+    },
+    orderBy: { effective_from: 'desc' },
+  });
+
+  if (companyAssignment) {
+    return { pricingListId: companyAssignment.pricing_list_id, source: 'company_pricing_list' };
+  }
+
+  const defaultList = await prisma.productPricingList.findFirst({
+    where: { is_default: true },
+  });
+  return { pricingListId: defaultList?.id, source: 'default_pricing_list' };
+}
+
+/**
  * Company-tiered pricing: company assignment wins over default list (§13).
  */
 export async function resolveProductPrice(
@@ -60,25 +87,7 @@ export async function resolveProductPrice(
     throw new Error(`Product ${productId} not found`);
   }
 
-  const companyAssignment = await prisma.companyPricingListAssignment.findFirst({
-    where: {
-      company_id: companyId,
-      effective_from: { lte: atInstant },
-      OR: [{ effective_to: null }, { effective_to: { gt: atInstant } }],
-    },
-    orderBy: { effective_from: 'desc' },
-  });
-
-  let pricingListId = companyAssignment?.pricing_list_id;
-  let source: ResolvedPrice['source'] = 'company_pricing_list';
-
-  if (!pricingListId) {
-    const defaultList = await prisma.productPricingList.findFirst({
-      where: { is_default: true },
-    });
-    pricingListId = defaultList?.id;
-    source = 'default_pricing_list';
-  }
+  const { pricingListId, source } = await resolveEffectivePricingList(companyId, atInstant);
 
   if (pricingListId) {
     const tieredPrice = await prisma.productPrice.findFirst({
@@ -110,7 +119,46 @@ export async function resolveProductPrice(
   };
 }
 
+/**
+ * Batch form of {@link resolveProductPrice} for planners and bulk quoting:
+ * one query for the list price of many products instead of one per product.
+ *
+ * @param pricingListId Pricing list to read, already resolved by the caller.
+ * @param productIds Products to price (base-variant price only).
+ * @returns Map of product id to list price for the products the list covers.
+ */
+export async function resolveListPrices(
+  pricingListId: string | undefined,
+  productIds: string[],
+  atInstant = new Date(),
+): Promise<Map<string, Decimal>> {
+  const prices = new Map<string, Decimal>();
+  if (!pricingListId || productIds.length === 0) {
+    return prices;
+  }
+
+  const rows = await prisma.productPrice.findMany({
+    where: {
+      pricing_list_id: pricingListId,
+      product_id: { in: productIds },
+      variant_id: null,
+      effective_from: { lte: atInstant },
+      OR: [{ effective_to: null }, { effective_to: { gt: atInstant } }],
+    },
+    orderBy: { effective_from: 'asc' },
+  });
+
+  // Ascending order means the latest effective row overwrites earlier ones.
+  for (const row of rows) {
+    prices.set(row.product_id, row.price);
+  }
+
+  return prices;
+}
+
 export const menuResolver = {
   resolveEffectiveMenu,
+  resolveEffectivePricingList,
   resolveProductPrice,
+  resolveListPrices,
 };
