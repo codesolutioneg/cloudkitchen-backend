@@ -20,6 +20,7 @@ import jobsRouter from '../modules/jobs/jobs.routes';
 import integrationsRouter from '../modules/integrations/integrations.routes';
 import localizationRouter from '../modules/localization/localization.routes';
 import fulfillmentRouter from '../modules/fulfillment/fulfillment.routes';
+import mealPlansRouter from '../modules/meal-plans/meal-plans.routes';
 
 const router = Router();
 
@@ -44,5 +45,6 @@ router.use('/v1', jobsRouter);
 router.use('/v1', integrationsRouter);
 router.use('/v1', localizationRouter);
 router.use('/v1', fulfillmentRouter);
+router.use('/v1', mealPlansRouter);
 
 export default router;
