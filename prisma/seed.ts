@@ -79,6 +79,7 @@ const DASHBOARD_PAGES: Array<{ name: string; route: string; sortOrder: number }>
   { name: 'Features', route: '/dashboard/features', sortOrder: 40 },
   { name: 'Catalog', route: '/dashboard/catalog', sortOrder: 50 },
   { name: 'Menus', route: '/dashboard/menus', sortOrder: 60 },
+  { name: 'Meal Plans', route: '/dashboard/meal-plans', sortOrder: 65 },
   { name: 'Rules', route: '/dashboard/rules', sortOrder: 70 },
   { name: 'Workflows', route: '/dashboard/workflows', sortOrder: 80 },
   { name: 'Orders', route: '/dashboard/orders', sortOrder: 85 },
@@ -783,6 +784,14 @@ async function seedFulfillmentRolePermissions(roles: Record<string, string>, pag
   await grant('Operations', '/dashboard/operations', { view: true, edit: true, create: true });
   await grant('Operations', '/dashboard/orders', kitchenOpsOrders);
   await grant('Delivery', '/dashboard/delivery', { view: true, edit: true });
+  // Sales owns the budget conversation with the factory; Operations builds the plan.
+  await grant('Sales', '/dashboard/meal-plans', { view: true, create: true, edit: true });
+  await grant('Operations', '/dashboard/meal-plans', {
+    view: true,
+    create: true,
+    edit: true,
+    approve: true,
+  });
 }
 
 async function seedDeliveryDashboardUser(roles: Record<string, string>) {

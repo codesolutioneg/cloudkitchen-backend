@@ -22,7 +22,8 @@ faker.setDefaultRefDate(new Date('2026-07-01'));
 
 const CURRENCY = process.env.BUSINESS_DEFAULT_CURRENCY ?? 'SAR';
 const COMPANY_PASSWORD = 'SecurePass123!';
-const CATEGORY_COUNT = Number(process.env.DEMO_CATEGORIES ?? 8);
+// All ten categories so the meal planner has every component (salad, side, drink…).
+const CATEGORY_COUNT = Number(process.env.DEMO_CATEGORIES ?? 10);
 const PRODUCTS_PER_CATEGORY = Number(process.env.DEMO_PRODUCTS_PER_CATEGORY ?? 6);
 const COMPANY_COUNT = Number(process.env.DEMO_COMPANIES ?? 6);
 const ORDERS_PER_COMPANY = Number(process.env.DEMO_ORDERS_PER_COMPANY ?? 3);
@@ -47,6 +48,51 @@ const FOOD_CATEGORIES = [
   { en: 'Smoothies', ar: 'سموثي' },
   { en: 'Salads', ar: 'سلطات' },
 ];
+
+/**
+ * Which meal component each demo category plays, plus a realistic per-serving
+ * macro band. The budget planner picks one product per component slot, so the
+ * demo catalog has to cover protein, carb, salad, side, drink and dessert.
+ */
+const CATEGORY_NUTRITION: Record<
+  string,
+  {
+    componentType: string;
+    kcal: [number, number];
+    protein: [number, number];
+    carbs: [number, number];
+    fat: [number, number];
+    allergens: string[];
+  }
+> = {
+  Breakfast: { componentType: 'carb', kcal: [320, 620], protein: [10, 24], carbs: [38, 78], fat: [8, 26], allergens: ['gluten', 'egg'] },
+  'Hot Coffee': { componentType: 'drink', kcal: [5, 180], protein: [0, 8], carbs: [0, 22], fat: [0, 9], allergens: ['dairy'] },
+  'Fresh Juices': { componentType: 'drink', kcal: [90, 210], protein: [1, 4], carbs: [22, 48], fat: [0, 2], allergens: [] },
+  Sandwiches: { componentType: 'carb', kcal: [380, 680], protein: [16, 32], carbs: [42, 82], fat: [10, 28], allergens: ['gluten'] },
+  Burgers: { componentType: 'protein', kcal: [480, 880], protein: [26, 48], carbs: [32, 60], fat: [22, 48], allergens: ['gluten', 'dairy'] },
+  'Chicken Meals': { componentType: 'protein', kcal: [420, 780], protein: [34, 58], carbs: [18, 52], fat: [12, 34], allergens: [] },
+  Starters: { componentType: 'side', kcal: [140, 380], protein: [4, 14], carbs: [14, 42], fat: [6, 22], allergens: ['sesame'] },
+  Desserts: { componentType: 'dessert', kcal: [220, 520], protein: [3, 9], carbs: [30, 68], fat: [8, 26], allergens: ['dairy', 'nuts', 'gluten'] },
+  Smoothies: { componentType: 'drink', kcal: [160, 340], protein: [3, 12], carbs: [26, 56], fat: [2, 10], allergens: ['dairy'] },
+  Salads: { componentType: 'salad', kcal: [120, 340], protein: [4, 18], carbs: [10, 30], fat: [4, 20], allergens: ['sesame'] },
+};
+
+/**
+ * Menu item names are drawn from one shared pool, so a dish can land in a
+ * category that does not match what it actually is. The planner cares about the
+ * component, not the merchandising category, so the name wins when it is
+ * unambiguous and the category profile is the fallback.
+ */
+function componentForProduct(name: string, categoryComponent: string): string {
+  const n = name.toLowerCase();
+  if (/salad/.test(n)) return 'salad';
+  if (/latte|cappuccino|coffee|mejito|juice|smoothie/.test(n)) return 'drink';
+  if (/cake|kunafa|cheesecake|dessert/.test(n)) return 'dessert';
+  if (/chicken|beef|wings|shawarma|burger|bacon|halloumi/.test(n)) return 'protein';
+  if (/toast|sandwich|wrap|bowl|plate/.test(n)) return 'carb';
+  if (/mini box|pieces/.test(n)) return 'side';
+  return categoryComponent;
+}
 
 const MENU_ITEM_NAMES = [
   'Shakshuka Plate',
@@ -144,6 +190,7 @@ async function wipeTransactionalData() {
   await prisma.catalogMenuSection.deleteMany();
   await prisma.catalogMenu.deleteMany();
 
+  await prisma.productNutrition.deleteMany();
   await prisma.productPrice.deleteMany();
   await prisma.productTag.deleteMany();
   await prisma.productAvailability.deleteMany();
@@ -272,6 +319,30 @@ async function seedRealisticCatalog(pricingListId: string) {
         },
       });
 
+      const profile = CATEGORY_NUTRITION[cat.en];
+      if (profile) {
+        const between = ([min, max]: [number, number]) =>
+          faker.number.float({ min, max, fractionDigits: 1 }).toFixed(1);
+        await prisma.productNutrition.create({
+          data: {
+            product_id: product.id,
+            component_type: componentForProduct(name, profile.componentType),
+            serving_size_g: faker.number.int({ min: 150, max: 450 }),
+            calories_kcal: between(profile.kcal),
+            protein_g: between(profile.protein),
+            carbs_g: between(profile.carbs),
+            fat_g: between(profile.fat),
+            fiber_g: faker.number.float({ min: 0, max: 9, fractionDigits: 1 }).toFixed(1),
+            sodium_mg: faker.number.int({ min: 60, max: 1400 }).toString(),
+            allergens: faker.helpers.arrayElements(profile.allergens, {
+              min: 0,
+              max: profile.allergens.length,
+            }),
+            source: 'supplier',
+          },
+        });
+      }
+
       if (faker.datatype.boolean()) {
         await prisma.productOptionGroup.create({
           data: {
@@ -340,6 +411,22 @@ async function seedStableTestFixtures(pricingListId: string) {
       product_id: SEED_PRODUCT_ID,
       price: '48.00',
       effective_from: new Date('2020-01-01'),
+    },
+  });
+
+  await prisma.productNutrition.create({
+    data: {
+      product_id: SEED_PRODUCT_ID,
+      component_type: 'protein',
+      serving_size_g: 420,
+      calories_kcal: '640.00',
+      protein_g: '52.00',
+      carbs_g: '44.00',
+      fat_g: '24.00',
+      fiber_g: '5.00',
+      sodium_mg: '780.00',
+      allergens: ['sesame'],
+      source: 'supplier',
     },
   });
 
@@ -523,6 +610,41 @@ async function seedCompaniesAndOrders(
     });
 
     companyCreds.push({ legalName, userEmail: user.email, password: COMPANY_PASSWORD });
+
+    // A factory-canteen brief per company, left as a draft so the dashboard
+    // "Generate" action has something real to solve.
+    const planStart = new Date();
+    planStart.setUTCDate(planStart.getUTCDate() + 1);
+    const planEnd = new Date(planStart);
+    planEnd.setUTCDate(planEnd.getUTCDate() + 4);
+    await prisma.mealPlan.create({
+      data: {
+        company_id: company.id,
+        name: `${legalName} plant canteen week`,
+        description: 'Five working days, one hot meal per head, fixed budget.',
+        status: 'draft',
+        start_date: planStart,
+        end_date: planEnd,
+        headcount: faker.number.int({ min: 80, max: 900 }),
+        // Sized against the demo catalog: three components at 18-95 SAR each.
+        budget_per_meal: money(115, 165),
+        currency: CURRENCY,
+        pricing_list_id: pricingListId,
+        source_menu_id: menuId,
+        min_calories_kcal: '650.00',
+        max_calories_kcal: '1250.00',
+        min_protein_g: '40.00',
+        max_carbs_g: '140.00',
+        max_fat_g: '55.00',
+        slot_spec: [
+          { componentType: 'protein', quantity: 1 },
+          { componentType: 'carb', quantity: 1 },
+          { componentType: 'salad', quantity: 1 },
+        ] as Prisma.InputJsonValue,
+        exclude_allergens: faker.helpers.arrayElement([[], ['nuts'], ['gluten']]),
+        variety_window_days: 2,
+      },
+    });
 
     for (let o = 0; o < ORDERS_PER_COMPANY; o++) {
       const lineCount = faker.number.int({ min: 1, max: 4 });
