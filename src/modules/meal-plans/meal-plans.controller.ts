@@ -2,6 +2,7 @@ import { Request, Response } from 'express';
 import * as service from './meal-plans.service';
 import { sendPaginated, sendSuccess } from '../../core/utils/response';
 import { getRequestActor } from '../../core/middleware/requestContext';
+import type { ComponentType } from '../../engines/mealPlanOptimizer';
 
 export async function listPlans(req: Request, res: Response): Promise<void> {
   const actor = getRequestActor();
@@ -49,7 +50,15 @@ export async function duplicatePlan(req: Request, res: Response): Promise<void> 
 }
 
 export async function listCandidates(req: Request, res: Response): Promise<void> {
-  sendSuccess(res, await service.listCandidates(req.query as never));
+  sendSuccess(
+    res,
+    await service.listCandidates({
+      companyId: req.query.companyId as string,
+      sourceMenuId: req.query.sourceMenuId as string | undefined,
+      pricingListId: req.query.pricingListId as string | undefined,
+      componentType: req.query.componentType as ComponentType | undefined,
+    }),
+  );
 }
 
 export async function addItem(req: Request, res: Response): Promise<void> {

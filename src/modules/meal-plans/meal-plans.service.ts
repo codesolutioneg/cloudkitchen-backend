@@ -693,39 +693,51 @@ export async function generatePlan(planId: string, keepLockedItems = true) {
   await prisma.$transaction(async (tx) => {
     await tx.mealPlanDay.deleteMany({ where: { meal_plan_id: planId } });
 
-    for (const [index, day] of result.days.entries()) {
-      await tx.mealPlanDay.create({
-        data: {
-          meal_plan_id: planId,
-          plan_date: new Date(`${day.date}T00:00:00.000Z`),
-          sort_order: index,
-          cost_per_head: new Decimal(day.costPerHead),
-          total_cost: new Decimal(day.totalCost),
-          calories_kcal: new Decimal(day.caloriesKcal),
-          protein_g: new Decimal(day.proteinG),
-          carbs_g: new Decimal(day.carbsG),
-          fat_g: new Decimal(day.fatG),
-          is_feasible: day.isFeasible,
-          warnings: day.warnings as unknown as Prisma.InputJsonValue,
-          items: {
-            create: day.items.map((item, itemIndex) => ({
-              product_id: item.productId,
-              variant_id: item.variantId,
-              component_type: item.componentType,
-              quantity: item.quantity,
-              unit_price: new Decimal(item.unitPrice),
-              line_total: new Decimal(item.lineTotal),
-              calories_kcal: new Decimal(item.caloriesKcal),
-              protein_g: new Decimal(item.proteinG),
-              carbs_g: new Decimal(item.carbsG),
-              fat_g: new Decimal(item.fatG),
-              is_locked: item.isLocked,
-              sort_order: itemIndex,
-            })),
-          },
-        },
-      });
-    }
+    // Bulk insert rather than one round trip per day: a quarter-year plan is
+    // 92 days, which would otherwise run 92 sequential writes inside one
+    // interactive transaction and hit the transaction timeout.
+    const createdDays = await tx.mealPlanDay.createManyAndReturn({
+      data: result.days.map((day, index) => ({
+        meal_plan_id: planId,
+        plan_date: new Date(`${day.date}T00:00:00.000Z`),
+        sort_order: index,
+        cost_per_head: new Decimal(day.costPerHead),
+        total_cost: new Decimal(day.totalCost),
+        calories_kcal: new Decimal(day.caloriesKcal),
+        protein_g: new Decimal(day.proteinG),
+        carbs_g: new Decimal(day.carbsG),
+        fat_g: new Decimal(day.fatG),
+        is_feasible: day.isFeasible,
+        warnings: day.warnings as unknown as Prisma.InputJsonValue,
+      })),
+      select: { id: true, plan_date: true },
+    });
+
+    const dayIdByDate = new Map(
+      createdDays.map((day) => [isoDate(day.plan_date), day.id]),
+    );
+
+    await tx.mealPlanItem.createMany({
+      data: result.days.flatMap((day) => {
+        const dayId = dayIdByDate.get(day.date);
+        if (!dayId) return [];
+        return day.items.map((item, itemIndex) => ({
+          meal_plan_day_id: dayId,
+          product_id: item.productId,
+          variant_id: item.variantId,
+          component_type: item.componentType,
+          quantity: item.quantity,
+          unit_price: new Decimal(item.unitPrice),
+          line_total: new Decimal(item.lineTotal),
+          calories_kcal: new Decimal(item.caloriesKcal),
+          protein_g: new Decimal(item.proteinG),
+          carbs_g: new Decimal(item.carbsG),
+          fat_g: new Decimal(item.fatG),
+          is_locked: item.isLocked,
+          sort_order: itemIndex,
+        }));
+      }),
+    });
 
     await tx.mealPlan.update({
       where: { id: planId },

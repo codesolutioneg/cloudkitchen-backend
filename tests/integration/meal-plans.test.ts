@@ -417,6 +417,27 @@ describe('Budget meal planning', () => {
     expect(duplicated.body.data.name).toContain('(copy)');
   });
 
+  it('generates a long plan in one transaction', async () => {
+    const created = await createPlan({ startDate: '2026-05-01', endDate: '2026-06-14' });
+    const planId = created.body.data.id as string;
+
+    const generated = await request(app)
+      .post(`/api/v1/dashboard/meal-plans/${planId}/generate`)
+      .set(bearer(token))
+      .send({});
+
+    expect(generated.status).toBe(200);
+    expect(generated.body.data.days).toHaveLength(45);
+    expect(generated.body.data.days.every((d: { items: unknown[] }) => d.items.length === 3)).toBe(
+      true,
+    );
+  });
+
+  it('rejects a plan longer than the day cap', async () => {
+    const res = await createPlan({ startDate: '2026-05-01', endDate: '2026-12-31' });
+    expect(res.status).toBe(400);
+  });
+
   it('rejects an inverted date range', async () => {
     const res = await createPlan({ startDate: '2026-04-10', endDate: '2026-04-06' });
     expect(res.status).toBe(422);
