@@ -860,3 +860,183 @@ describe('Confirming a plan places the orders', () => {
     expect(confirm.status).toBe(400);
   });
 });
+
+describe('Company requests its own plan', () => {
+  let dashToken = '';
+  let companyToken = '';
+  let companyId = '';
+  const suffix = `mpr-${Date.now()}`;
+
+  beforeAll(async () => {
+    const dash = await loginDashboardUser();
+    dashToken = dash.body.data.accessToken as string;
+
+    const reg = await registerCompany(suffix);
+    companyId = reg.body.data.companyId as string;
+    await request(app)
+      .post(`/api/v1/dashboard/companies/${companyId}/approve`)
+      .set(bearer(dashToken))
+      .send({ reason: 'test' });
+    const login = await request(app)
+      .post('/api/v1/auth/company/login')
+      .send({ email: `user-${suffix}@example.com`, password: 'SecurePass123!' });
+    companyToken = login.body.data.accessToken as string;
+
+    const category = await request(app)
+      .post('/api/v1/dashboard/catalog/categories')
+      .set(bearer(dashToken))
+      .send({ name: `Self ${suffix}`, slug: `self-${suffix}` });
+    const categoryId = category.body.data.id as string;
+
+    const ids: string[] = [];
+    for (const spec of [
+      { name: `Self protein ${suffix}`, price: '18.00', componentType: 'protein', proteinG: 40 },
+      { name: `Self carb ${suffix}`, price: '7.00', componentType: 'carb', proteinG: 6 },
+      { name: `Self salad ${suffix}`, price: '6.00', componentType: 'salad', proteinG: 4 },
+    ]) {
+      const created = await request(app)
+        .post('/api/v1/dashboard/catalog/products')
+        .set(bearer(dashToken))
+        .send({ categoryId, name: spec.name, basePrice: spec.price, currency: 'EGP', visibility: 'public' });
+      await request(app)
+        .put(`/api/v1/dashboard/catalog/products/${created.body.data.id}/nutrition`)
+        .set(bearer(dashToken))
+        .send({ componentType: spec.componentType, caloriesKcal: 350, proteinG: spec.proteinG, carbsG: 35, fatG: 9, allergens: [] });
+      ids.push(created.body.data.id as string);
+    }
+
+    const menu = await request(app)
+      .post('/api/v1/dashboard/menus')
+      .set(bearer(dashToken))
+      .send({ name: `Self menu ${suffix}`, menuType: 'standard', isActive: true });
+    const menuId = menu.body.data.id as string;
+    const section = await request(app)
+      .post(`/api/v1/dashboard/menus/${menuId}/sections`)
+      .set(bearer(dashToken))
+      .send({ name: 'All', sortOrder: 1 });
+    for (const productId of ids) {
+      await request(app)
+        .post(`/api/v1/dashboard/menus/${menuId}/sections/${section.body.data.id}/products`)
+        .set(bearer(dashToken))
+        .send({ productId, sortOrder: 1 });
+    }
+    await request(app)
+      .post(`/api/v1/dashboard/menus/${menuId}/assignments`)
+      .set(bearer(dashToken))
+      .send({ scopeType: 'company', scopeId: companyId, priority: 90 });
+  });
+
+  const brief = (overrides: Record<string, unknown> = {}) => ({
+    startDate: '2026-10-05',
+    endDate: '2026-10-09',
+    headcount: 60,
+    budgetPerMeal: '40.00',
+    slots: [
+      { componentType: 'protein', quantity: 1 },
+      { componentType: 'carb', quantity: 1 },
+      { componentType: 'salad', quantity: 1 },
+    ],
+    minProteinG: 40,
+    varietyWindowDays: 0,
+    ...overrides,
+  });
+
+  it('lists the components available on my menu', async () => {
+    const res = await request(app)
+      .get('/api/v1/company/meal-plans/components')
+      .set(bearer(companyToken));
+
+    expect(res.status).toBe(200);
+    const types = res.body.data.map((c: { componentType: string }) => c.componentType);
+    expect(types).toEqual(expect.arrayContaining(['protein', 'carb', 'salad']));
+    const protein = res.body.data.find((c: { componentType: string }) => c.componentType === 'protein');
+    expect(Number(protein.cheapestPrice)).toBeLessThanOrEqual(18);
+  });
+
+  it('previews my own budget without saving anything', async () => {
+    const before = await request(app).get('/api/v1/company/meal-plans').set(bearer(companyToken));
+
+    const preview = await request(app)
+      .post('/api/v1/company/meal-plans/preview')
+      .set(bearer(companyToken))
+      .send(brief());
+
+    expect(preview.status).toBe(200);
+    expect(preview.body.data.days).toHaveLength(5);
+    expect(preview.body.data.isFeasible).toBe(true);
+
+    const after = await request(app).get('/api/v1/company/meal-plans').set(bearer(companyToken));
+    expect(after.body.data.length).toBe(before.body.data.length);
+  });
+
+  it('creates and solves a plan from my own brief', async () => {
+    const res = await request(app)
+      .post('/api/v1/company/meal-plans')
+      .set(bearer(companyToken))
+      .send(brief({ name: `My week ${suffix}` }));
+
+    expect(res.status).toBe(201);
+    const plan = res.body.data;
+    expect(plan.status).toBe('generated');
+    expect(plan.companyId).toBe(companyId);
+    expect(plan.days).toHaveLength(5);
+    for (const day of plan.days) {
+      expect(day.items).toHaveLength(3);
+      expect(Number(day.costPerHead)).toBeLessThanOrEqual(40);
+      expect(Number(day.proteinG)).toBeGreaterThanOrEqual(40);
+    }
+
+    const mine = await request(app).get('/api/v1/company/meal-plans').set(bearer(companyToken));
+    expect(mine.body.data.some((p: { id: string }) => p.id === plan.id)).toBe(true);
+  });
+
+  it('ignores a company id in the body and uses the token', async () => {
+    const otherSuffix = `${suffix}-x`;
+    const other = await registerCompany(otherSuffix);
+    const res = await request(app)
+      .post('/api/v1/company/meal-plans')
+      .set(bearer(companyToken))
+      .send({ ...brief(), companyId: other.body.data.companyId });
+
+    expect(res.status).toBe(201);
+    expect(res.body.data.companyId).toBe(companyId);
+  });
+
+  it('reports an unreachable budget instead of pretending', async () => {
+    const res = await request(app)
+      .post('/api/v1/company/meal-plans')
+      .set(bearer(companyToken))
+      .send(brief({ budgetPerMeal: '10.00', name: `Too cheap ${suffix}` }));
+
+    expect(res.status).toBe(201);
+    expect(res.body.data.isFeasible).toBe(false);
+    const codes = res.body.data.days.flatMap((d: { warnings: Array<{ code: string }> }) =>
+      d.warnings.map((w) => w.code),
+    );
+    expect(codes).toContain('budget_exceeded');
+  });
+
+  it('lets me drop a plan I requested but not a confirmed one', async () => {
+    const created = await request(app)
+      .post('/api/v1/company/meal-plans')
+      .set(bearer(companyToken))
+      .send(brief({ name: `Throwaway ${suffix}` }));
+    const planId = created.body.data.id as string;
+
+    const removed = await request(app)
+      .delete(`/api/v1/company/meal-plans/${planId}`)
+      .set(bearer(companyToken));
+    expect(removed.status).toBe(204);
+
+    const mine = await request(app).get('/api/v1/company/meal-plans').set(bearer(companyToken));
+    expect(mine.body.data.some((p: { id: string }) => p.id === planId)).toBe(false);
+  });
+
+  it('rejects a brief longer than the day cap', async () => {
+    const res = await request(app)
+      .post('/api/v1/company/meal-plans')
+      .set(bearer(companyToken))
+      .send(brief({ startDate: '2026-10-01', endDate: '2027-02-01' }));
+    expect(res.status).toBe(400);
+  });
+});

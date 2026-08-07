@@ -438,6 +438,11 @@ export async function getPlan(planId: string) {
 
 export async function createPlan(input: PlanBriefInput & { name: string; description?: string; currency: string }) {
   await assertCompanyExists(input.companyId);
+  return createPlanRecord(input);
+}
+
+/** Shared by the dashboard and the company self-service path. Assumes the caller authorised the company. */
+async function createPlanRecord(input: PlanBriefInput & { name: string; description?: string; currency: string }) {
   assertDateRange(input.startDate, input.endDate);
 
   const actor = actorColumns();
@@ -670,7 +675,14 @@ export async function previewPlan(input: PlanBriefInput) {
  * @returns The regenerated plan with its days and items.
  */
 export async function generatePlan(planId: string, keepLockedItems = true) {
-  const plan = await loadPlanOrThrow(planId);
+  await loadPlanOrThrow(planId);
+  await generatePlanRecord(planId, keepLockedItems);
+  return getPlan(planId);
+}
+
+/** Shared by both surfaces. Assumes the caller authorised access to the plan. */
+async function generatePlanRecord(planId: string, keepLockedItems = true) {
+  const plan = await loadPlanRow(planId);
   if (plan.status === 'approved') {
     throw new ConflictError('An approved meal plan cannot be regenerated; duplicate it instead');
   }
@@ -781,8 +793,6 @@ export async function generatePlan(planId: string, keepLockedItems = true) {
       },
     });
   });
-
-  return getPlan(planId);
 }
 
 // ── Manual day edits ──────────────────────────────────────────────────────────
@@ -1348,4 +1358,115 @@ export async function confirmCompanyPlan(
   ]);
 
   return { plan: await getCompanyPlan(planId), orderIds: createdOrderIds };
+}
+
+/**
+ * The client builds their own brief: their budget, their dates, the components
+ * they want. Solved immediately so they see the result rather than waiting for
+ * the kitchen.
+ *
+ * The company is taken from the token, never from the body, and the commercial
+ * levers (which pricing list, which menu) stay with the kitchen: the plan uses
+ * whatever is already assigned to this company.
+ */
+export async function createCompanyPlan(
+  input: Omit<PlanBriefInput, 'companyId' | 'pricingListId' | 'sourceMenuId'> & {
+    name?: string;
+    currency?: string;
+  },
+) {
+  const actor = getCompanyActorOrThrow();
+
+  const company = await prisma.company.findFirst({
+    where: { id: actor.companyId, is_deleted: false },
+    select: { legal_name: true, approval_status: true },
+  });
+  if (!company) {
+    throw new NotFoundError('Company not found');
+  }
+  if (company.approval_status !== 'approved') {
+    throw new BadRequestError('Your company must be approved before requesting a meal plan');
+  }
+
+  const created = await createPlanRecord({
+    ...input,
+    companyId: actor.companyId,
+    name: input.name?.trim() || `${company.legal_name} ${input.startDate} to ${input.endDate}`,
+    currency: input.currency ?? 'EGP',
+    pricingListId: null,
+    sourceMenuId: null,
+  });
+
+  await generatePlanRecord(created.id, false);
+  return getCompanyPlan(created.id);
+}
+
+/** A client can drop a plan they requested, as long as it is not confirmed. */
+export async function archiveCompanyPlan(planId: string) {
+  const actor = getCompanyActorOrThrow();
+  const plan = await loadCompanyPlanOrThrow(planId, actor.companyId);
+  if (plan.status === 'approved') {
+    throw new ConflictError('A confirmed plan cannot be removed');
+  }
+  await prisma.mealPlan.update({
+    where: { id: planId },
+    data: { status: 'archived', is_deleted: true, deleted_at: new Date() },
+  });
+}
+
+/** Solve a client brief without saving it, so they can try budgets first. */
+export async function previewCompanyPlan(
+  input: Omit<PlanBriefInput, 'companyId' | 'pricingListId' | 'sourceMenuId'>,
+) {
+  const actor = getCompanyActorOrThrow();
+  assertDateRange(input.startDate, input.endDate);
+
+  const { result } = await solveBrief({
+    companyId: actor.companyId,
+    startDate: input.startDate,
+    endDate: input.endDate,
+    headcount: input.headcount,
+    budgetPerMeal: input.budgetPerMeal,
+    pricingListId: null,
+    sourceMenuId: null,
+    slots: input.slots,
+    excludeAllergens: input.excludeAllergens ?? [],
+    varietyWindowDays: input.varietyWindowDays ?? 2,
+    targets: {
+      minCaloriesKcal: input.minCaloriesKcal ?? null,
+      maxCaloriesKcal: input.maxCaloriesKcal ?? null,
+      minProteinG: input.minProteinG ?? null,
+      maxProteinG: input.maxProteinG ?? null,
+      minCarbsG: input.minCarbsG ?? null,
+      maxCarbsG: input.maxCarbsG ?? null,
+      maxFatG: input.maxFatG ?? null,
+    },
+  });
+
+  return result;
+}
+
+/** What the client can build a plan from: the components their menu actually covers. */
+export async function listCompanyComponents() {
+  const actor = getCompanyActorOrThrow();
+  const candidates = await resolveCandidates(actor.companyId, null, null);
+
+  const byComponent = new Map<string, { count: number; cheapest: number }>();
+  for (const candidate of candidates) {
+    const entry = byComponent.get(candidate.componentType);
+    if (!entry) {
+      byComponent.set(candidate.componentType, { count: 1, cheapest: candidate.unitPrice });
+    } else {
+      entry.count += 1;
+      entry.cheapest = Math.min(entry.cheapest, candidate.unitPrice);
+    }
+  }
+
+  return [...byComponent.entries()]
+    .map(([componentType, v]) => ({
+      componentType,
+      productCount: v.count,
+      cheapestPrice: v.cheapest.toFixed(2),
+    }))
+    .sort((a, b) => a.componentType.localeCompare(b.componentType));
 }

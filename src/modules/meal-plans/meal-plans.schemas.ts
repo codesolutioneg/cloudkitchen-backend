@@ -594,3 +594,86 @@ registry.registerPath({
   },
   responses: { 201: { description: 'Plan confirmed and orders created' } },
 });
+
+/** A client brief: no companyId (taken from the token) and no commercial levers. */
+export const companyBriefSchema = z
+  .object({
+    name: z.string().min(1).max(180).optional(),
+    startDate: isoDate,
+    endDate: isoDate,
+    headcount: z.number().int().min(1).max(1000000),
+    budgetPerMeal: money,
+    currency: z.string().length(3).optional(),
+    slots: z.array(slotSpecSchema).min(1).max(10),
+    excludeAllergens: z.array(z.string().min(1).max(60)).max(30).optional(),
+    varietyWindowDays: z.number().int().min(0).max(30).optional(),
+    ...targetFields,
+  })
+  .refine((v) => v.endDate >= v.startDate, {
+    message: 'endDate must be on or after startDate',
+    path: ['endDate'],
+  });
+
+export const companyComponentSchema = z
+  .object({
+    componentType: z.string(),
+    productCount: z.number().int(),
+    cheapestPrice: z.string(),
+  })
+  .openapi('MealPlanCompanyComponent');
+
+registry.registerPath({
+  method: 'post',
+  path: '/api/v1/company/meal-plans',
+  tags: ['Meal Plans'],
+  summary: 'Request a meal plan and solve it',
+  security: companyBearer,
+  request: { body: { content: { 'application/json': { schema: companyBriefSchema } } } },
+  responses: {
+    201: {
+      description: 'Plan created and solved',
+      content: { 'application/json': { schema: SuccessEnvelopeSchema(mealPlanDetailSchema) } },
+    },
+  },
+});
+
+registry.registerPath({
+  method: 'post',
+  path: '/api/v1/company/meal-plans/preview',
+  tags: ['Meal Plans'],
+  summary: 'Try a brief without saving it',
+  security: companyBearer,
+  request: { body: { content: { 'application/json': { schema: companyBriefSchema } } } },
+  responses: {
+    200: {
+      description: 'Solved preview',
+      content: { 'application/json': { schema: SuccessEnvelopeSchema(mealPlanPreviewSchema) } },
+    },
+  },
+});
+
+registry.registerPath({
+  method: 'get',
+  path: '/api/v1/company/meal-plans/components',
+  tags: ['Meal Plans'],
+  summary: 'Meal components available on my menu',
+  security: companyBearer,
+  responses: {
+    200: {
+      description: 'Components with product counts and cheapest price',
+      content: {
+        'application/json': { schema: SuccessEnvelopeSchema(z.array(companyComponentSchema)) },
+      },
+    },
+  },
+});
+
+registry.registerPath({
+  method: 'delete',
+  path: '/api/v1/company/meal-plans/{id}',
+  tags: ['Meal Plans'],
+  summary: 'Remove a plan I requested',
+  security: companyBearer,
+  request: { params: planIdParamsSchema },
+  responses: { 204: { description: 'Plan removed' } },
+});

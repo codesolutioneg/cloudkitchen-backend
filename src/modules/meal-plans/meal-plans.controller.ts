@@ -109,3 +109,20 @@ export async function swapCompanyPlanItem(req: Request, res: Response): Promise<
 export async function confirmCompanyPlan(req: Request, res: Response): Promise<void> {
   sendSuccess(res, await service.confirmCompanyPlan(req.params.id!, req.body), 201);
 }
+
+export async function createCompanyPlan(req: Request, res: Response): Promise<void> {
+  sendSuccess(res, await service.createCompanyPlan(req.body), 201);
+}
+
+export async function previewCompanyPlan(req: Request, res: Response): Promise<void> {
+  sendSuccess(res, await service.previewCompanyPlan(req.body));
+}
+
+export async function archiveCompanyPlan(req: Request, res: Response): Promise<void> {
+  await service.archiveCompanyPlan(req.params.id!);
+  res.status(204).send();
+}
+
+export async function listCompanyComponents(_req: Request, res: Response): Promise<void> {
+  sendSuccess(res, await service.listCompanyComponents());
+}

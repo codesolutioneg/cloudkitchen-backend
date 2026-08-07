@@ -14,6 +14,7 @@ import {
   generatePlanSchema,
   itemIdParamsSchema,
   listPlansQuerySchema,
+  companyBriefSchema,
   confirmPlanSchema,
   planIdParamsSchema,
   previewPlanSchema,
@@ -136,6 +137,30 @@ router.delete(
 const companyAuth = companyAuthMiddleware;
 
 router.get('/company/meal-plans', companyAuth, asyncHandler(controller.listCompanyPlans));
+router.post(
+  '/company/meal-plans',
+  companyAuth,
+  validate(companyBriefSchema),
+  asyncHandler(controller.createCompanyPlan),
+);
+// Static segments before `/:id` so they are not captured as ids.
+router.get(
+  '/company/meal-plans/components',
+  companyAuth,
+  asyncHandler(controller.listCompanyComponents),
+);
+router.post(
+  '/company/meal-plans/preview',
+  companyAuth,
+  validate(companyBriefSchema),
+  asyncHandler(controller.previewCompanyPlan),
+);
+router.delete(
+  '/company/meal-plans/:id',
+  companyAuth,
+  validate(planIdParamsSchema, 'params'),
+  asyncHandler(controller.archiveCompanyPlan),
+);
 router.get(
   '/company/meal-plans/:id',
   companyAuth,
