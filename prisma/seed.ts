@@ -81,6 +81,7 @@ const DASHBOARD_PAGES: Array<{ name: string; route: string; sortOrder: number; i
   { name: 'Catalog', route: '/dashboard/catalog', sortOrder: 50, icon: 'Boxes' },
   { name: 'Menus', route: '/dashboard/menus', sortOrder: 60, icon: 'UtensilsCrossed' },
   { name: 'Meal Plans', route: '/dashboard/meal-plans', sortOrder: 65, icon: 'Salad' },
+  { name: 'Billing', route: '/dashboard/billing', sortOrder: 67, icon: 'Receipt' },
   { name: 'Rules', route: '/dashboard/rules', sortOrder: 70, icon: 'ScrollText' },
   { name: 'Workflows', route: '/dashboard/workflows', sortOrder: 80, icon: 'Workflow' },
   { name: 'Kitchen', route: '/dashboard/kitchen', sortOrder: 84, icon: 'ChefHat' },

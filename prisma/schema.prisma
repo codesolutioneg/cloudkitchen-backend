@@ -137,6 +137,8 @@ model Company {
   pricing_list_assignments CompanyPricingListAssignment[]
   dashboard_assignments    DashboardUserCompanyAssignment[]
   company_roles            CompanyRole[]
+  billing_terms            CompanyBillingTerms?
+  invoices                 Invoice[]
   custom_products          Product[]                        @relation("CompanyCustomProducts")
   meal_plans               MealPlan[]
 
@@ -1246,6 +1248,7 @@ model Order {
 
   company           Company                 @relation(fields: [company_id], references: [id], onDelete: Restrict)
   meal_plan         MealPlan?               @relation(fields: [meal_plan_id], references: [id], onDelete: SetNull)
+  invoice_lines     InvoiceLine[]
   department        Department?             @relation(fields: [department_id], references: [id], onDelete: SetNull)
   ordered_by        CompanyUser             @relation("OrderPlacedBy", fields: [ordered_by_user_id], references: [id], onDelete: Restrict)
   workflow_instance EntityWorkflowInstance? @relation(fields: [workflow_instance_id], references: [id], onDelete: SetNull)
@@ -2161,6 +2164,7 @@ model MealPlan {
   source_menu  CatalogMenu?        @relation(fields: [source_menu_id], references: [id], onDelete: SetNull)
   days         MealPlanDay[]
   orders       Order[]
+  invoices     Invoice[]
 
   @@index([company_id, status])
   @@index([start_date])
@@ -2214,4 +2218,123 @@ model MealPlanItem {
   @@index([meal_plan_day_id])
   @@index([product_id])
   @@map("meal_plan_items")
+}
+
+// ============================================================================
+// §32: MODULE: Billing terms, invoices and payment plans
+//
+// Corporate catering is rarely paid per order on a card. A client is put on
+// terms (weekly or monthly consolidated invoice, net N days) or pays a plan in
+// instalments. Per-order payment proof (order_payments) still works unchanged
+// for clients who are not on terms.
+// ============================================================================
+
+model CompanyBillingTerms {
+  id         String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  company_id String @unique @db.Uuid
+
+  // per_order | weekly_invoice | monthly_invoice | plan_instalments
+  payment_mode String  @default("per_order") @db.VarChar(30)
+  // Days after issue that an invoice falls due.
+  net_days     Int     @default(0)
+  // 0 means no limit. Unpaid invoiced value is checked against this.
+  credit_limit Decimal @default(0) @db.Decimal(14, 2)
+  currency     String  @db.Char(3)
+  // Purchase-order reference the client wants printed on every invoice.
+  po_reference String? @db.VarChar(120)
+  notes        String?
+
+  created_at      DateTime @default(now()) @db.Timestamptz(6)
+  updated_at      DateTime @updatedAt @db.Timestamptz(6)
+  updated_by_type String?  @db.VarChar(20)
+  updated_by_id   String?  @db.Uuid
+
+  company Company @relation(fields: [company_id], references: [id], onDelete: Cascade)
+
+  @@map("company_billing_terms")
+}
+
+model Invoice {
+  id             String  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  company_id     String  @db.Uuid
+  meal_plan_id   String? @db.Uuid
+  invoice_number String  @unique @db.VarChar(40)
+
+  // draft | issued | part_paid | paid | overdue | void
+  status String @default("draft") @db.VarChar(20)
+  // orders | plan_instalments
+  source String @default("orders") @db.VarChar(30)
+
+  period_start DateTime? @db.Date
+  period_end   DateTime? @db.Date
+  issued_at    DateTime? @db.Timestamptz(6)
+  due_at       DateTime? @db.Date
+
+  subtotal_amount Decimal @default(0) @db.Decimal(14, 2)
+  tax_amount      Decimal @default(0) @db.Decimal(14, 2)
+  total_amount    Decimal @default(0) @db.Decimal(14, 2)
+  paid_amount     Decimal @default(0) @db.Decimal(14, 2)
+  currency        String  @db.Char(3)
+  po_reference    String? @db.VarChar(120)
+  notes           String?
+
+  created_at      DateTime  @default(now()) @db.Timestamptz(6)
+  updated_at      DateTime  @updatedAt @db.Timestamptz(6)
+  created_by_type String?   @db.VarChar(20)
+  created_by_id   String?   @db.Uuid
+  updated_by_type String?   @db.VarChar(20)
+  updated_by_id   String?   @db.Uuid
+  is_deleted      Boolean   @default(false)
+  deleted_at      DateTime? @db.Timestamptz(6)
+
+  company     Company             @relation(fields: [company_id], references: [id], onDelete: Restrict)
+  meal_plan   MealPlan?           @relation(fields: [meal_plan_id], references: [id], onDelete: SetNull)
+  lines       InvoiceLine[]
+  instalments PaymentInstalment[]
+
+  @@index([company_id, status])
+  @@index([due_at])
+  @@map("invoices")
+}
+
+model InvoiceLine {
+  id          String  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  invoice_id  String  @db.Uuid
+  order_id    String? @db.Uuid
+  description String  @db.VarChar(255)
+  quantity    Int     @default(1)
+  unit_amount Decimal @db.Decimal(14, 2)
+  line_total  Decimal @db.Decimal(14, 2)
+
+  invoice Invoice @relation(fields: [invoice_id], references: [id], onDelete: Cascade)
+  order   Order?  @relation(fields: [order_id], references: [id], onDelete: SetNull)
+
+  @@index([invoice_id])
+  @@map("invoice_lines")
+}
+
+model PaymentInstalment {
+  id         String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  invoice_id String @db.Uuid
+  sequence   Int
+
+  due_at DateTime @db.Date
+  amount Decimal  @db.Decimal(14, 2)
+  // pending | proof_submitted | paid | overdue | waived
+  status String   @default("pending") @db.VarChar(20)
+
+  proof_attachment_id String?   @db.Uuid
+  paid_at             DateTime? @db.Timestamptz(6)
+  reviewed_by         String?   @db.Uuid
+  reviewed_at         DateTime? @db.Timestamptz(6)
+  rejection_reason    String?
+
+  created_at DateTime @default(now()) @db.Timestamptz(6)
+  updated_at DateTime @updatedAt @db.Timestamptz(6)
+
+  invoice Invoice @relation(fields: [invoice_id], references: [id], onDelete: Cascade)
+
+  @@unique([invoice_id, sequence])
+  @@index([status, due_at])
+  @@map("payment_instalments")
 }
