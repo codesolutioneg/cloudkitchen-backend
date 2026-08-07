@@ -143,9 +143,12 @@ describe('Costing joins up with orders and plans', () => {
     expect(margin.status).toBe(200);
     expect(Number(margin.body.data.foodCostPerHead)).toBeCloseTo(60, 2); // 30 per day, two days
     expect(Number(margin.body.data.revenuePerHead)).toBeCloseTo(140, 2); // 70 per day
-    expect(Number(margin.body.data.marginPerHead)).toBeCloseTo(80, 2);
-    expect(Number(margin.body.data.marginPercent)).toBeCloseTo(57.14, 1);
-    expect(Number(margin.body.data.planMargin)).toBeCloseTo(800, 2); // x10 heads
+    // Margin is measured against the revenue we can cost (the protein, 100),
+    // not against the whole 140, because the carb has no recipe.
+    expect(Number(margin.body.data.costedRevenuePerHead)).toBeCloseTo(100, 2);
+    expect(Number(margin.body.data.uncostedRevenuePerHead)).toBeCloseTo(40, 2);
+    expect(Number(margin.body.data.marginPerHead)).toBeCloseTo(40, 2);
+    expect(Number(margin.body.data.marginPercent)).toBeCloseTo(40, 1);
   });
 
   it('reports how much of the plan the margin actually covers', async () => {
@@ -155,6 +158,40 @@ describe('Costing joins up with orders and plans', () => {
     // The carb has no recipe, so half the lines are uncosted and we say so.
     expect(margin.body.data.uncostedLines).toBeGreaterThan(0);
     expect(Number(margin.body.data.costCoveragePercent)).toBeLessThan(100);
+  });
+
+  it('refuses to report a margin it cannot measure', async () => {
+    // A plan whose products have no recipe at all must not read as 100% profit.
+    const bare = await request(app)
+      .post('/api/v1/dashboard/meal-plans')
+      .set(bearer(dashToken))
+      .send({
+        companyId,
+        name: `CI uncosted ${SUFFIX}`,
+        startDate: '2027-03-01',
+        endDate: '2027-03-01',
+        headcount: 5,
+        budgetPerMeal: '100.00',
+        currency: 'EGP',
+        slots: [{ componentType: 'carb', quantity: 1 }],
+        varietyWindowDays: 0,
+      });
+    const bareId = bare.body.data.id as string;
+    await request(app)
+      .post(`/api/v1/dashboard/meal-plans/${bareId}/generate`)
+      .set(bearer(dashToken))
+      .send({});
+
+    const margin = await request(app)
+      .get(`/api/v1/dashboard/meal-plans/${bareId}/margin`)
+      .set(bearer(dashToken));
+
+    expect(margin.status).toBe(200);
+    expect(margin.body.data.costedLines).toBe(0);
+    expect(margin.body.data.marginPercent).toBeNull();
+    expect(margin.body.data.marginPerHead).toBeNull();
+    expect(margin.body.data.planMargin).toBeNull();
+    expect(margin.body.data.costCoveragePercent).toBe('0.00');
   });
 
   it('honours a halal requirement as a hard filter', async () => {

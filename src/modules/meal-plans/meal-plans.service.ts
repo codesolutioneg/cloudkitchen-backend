@@ -1504,47 +1504,58 @@ export async function getPlanMargin(planId: string) {
   );
   const costs = await recipeCostEngine.snapshotCostsForProducts(keys);
 
-  let revenue = new Decimal(0);
+  // Revenue is split by whether we can actually cost the line. Measuring margin
+  // against revenue we cannot cost would report the uncosted part as pure
+  // profit, which is how a half-entered catalog turns into a confident lie.
+  let costedRevenue = new Decimal(0);
+  let uncostedRevenue = new Decimal(0);
   let cost = new Decimal(0);
   let costedLines = 0;
   let uncostedLines = 0;
 
   for (const day of days) {
     for (const item of day.items) {
-      revenue = revenue.plus(item.line_total);
       const snapshot = costs.get(
         `${item.product_id}:${item.variant_id ?? recipeCostEngine.NO_VARIANT_KEY}`,
       );
       if (snapshot?.isCosted) {
+        costedRevenue = costedRevenue.plus(item.line_total);
         cost = cost.plus(snapshot.totalCost.times(item.quantity));
         costedLines += 1;
       } else {
+        uncostedRevenue = uncostedRevenue.plus(item.line_total);
         uncostedLines += 1;
       }
     }
   }
 
   const totalLines = costedLines + uncostedLines;
+  const totalRevenue = costedRevenue.plus(uncostedRevenue);
   const headcount = plan.headcount;
-  const marginPerHead = revenue.minus(cost);
+  const margin = costedRevenue.minus(cost);
 
   return {
     planId,
     currency: plan.currency,
     headcount,
     // Per head, per day, summed across the plan.
-    revenuePerHead: revenue.toFixed(2),
-    foodCostPerHead: cost.toFixed(2),
-    marginPerHead: marginPerHead.toFixed(2),
-    marginPercent: revenue.greaterThan(0)
-      ? marginPerHead.dividedBy(revenue).times(100).toFixed(2)
-      : null,
-    planRevenue: revenue.times(headcount).toFixed(2),
-    planFoodCost: cost.times(headcount).toFixed(2),
-    planMargin: marginPerHead.times(headcount).toFixed(2),
+    revenuePerHead: totalRevenue.toFixed(2),
+    // Null rather than a number when nothing on the plan has a food cost.
+    // A margin of "100%" from an empty cost table is worse than no answer.
+    foodCostPerHead: costedLines === 0 ? null : cost.toFixed(2),
+    marginPerHead: costedLines === 0 ? null : margin.toFixed(2),
+    marginPercent:
+      costedLines === 0 || costedRevenue.lessThanOrEqualTo(0)
+        ? null
+        : margin.dividedBy(costedRevenue).times(100).toFixed(2),
+    planRevenue: totalRevenue.times(headcount).toFixed(2),
+    planFoodCost: costedLines === 0 ? null : cost.times(headcount).toFixed(2),
+    planMargin: costedLines === 0 ? null : margin.times(headcount).toFixed(2),
+    // The margin above describes this slice of revenue only.
+    costedRevenuePerHead: costedRevenue.toFixed(2),
+    uncostedRevenuePerHead: uncostedRevenue.toFixed(2),
     costedLines,
     uncostedLines,
-    // How much of the plan the margin above actually covers.
     costCoveragePercent: totalLines === 0 ? '0.00' : ((costedLines / totalLines) * 100).toFixed(2),
   };
 }
