@@ -37,6 +37,13 @@ router.post(
   validate(createApprovalWorkflowSchema),
   asyncHandler(controller.createApprovalWorkflow),
 );
+router.get(
+  '/dashboard/approval-workflows/:id',
+  dashAuth,
+  canView,
+  validate(idParamsSchema, 'params'),
+  asyncHandler(controller.getApprovalWorkflow),
+);
 router.patch(
   '/dashboard/approval-workflows/:id',
   dashAuth,

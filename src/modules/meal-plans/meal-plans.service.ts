@@ -216,7 +216,10 @@ export async function resolveCandidates(
   return products.flatMap((product) => {
     const nutrition = product.nutrition;
     if (!nutrition) return [];
+    // A custom product awaiting approval carries no price, so there is nothing
+    // to budget against and it cannot be planned.
     const price = listPrices.get(product.id) ?? product.base_price;
+    if (price === null) return [];
     return [
       {
         productId: product.id,
@@ -899,6 +902,9 @@ export async function addItem(
     (await menuResolver.resolveEffectivePricingList(plan.company_id)).pricingListId;
   const listPrices = await menuResolver.resolveListPrices(effectiveListId, [product.id]);
   const unitPrice = listPrices.get(product.id) ?? product.base_price;
+  if (unitPrice === null) {
+    throw new BadRequestError('This product has no price yet and cannot be added to a plan');
+  }
 
   const nutrition = product.nutrition;
   const perUnit = {

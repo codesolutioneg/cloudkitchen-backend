@@ -77,6 +77,7 @@ export const productSchema = z
 
 export const listProductsQuerySchema = z.object({
   categoryId: z.string().uuid().optional(),
+  search: z.string().max(100).optional(),
   page: z.coerce.number().int().min(1).optional(),
   pageSize: z.coerce.number().int().min(1).max(100).optional(),
 });
@@ -198,6 +199,11 @@ export const assignCompanyPricingListSchema = z.object({
   pricingListId: z.string().uuid(),
   effectiveFrom: z.string().datetime().optional(),
   effectiveTo: z.string().datetime().optional(),
+});
+
+export const listCompanyCatalogAssignmentsQuerySchema = z.object({
+  companyId: z.string().uuid().optional(),
+  approvalStatus: z.string().optional(),
 });
 
 export const companyCatalogMenuSchema = z
@@ -331,6 +337,39 @@ registry.registerPath({
     body: { content: { 'application/json': { schema: assignCompanyPricingListSchema } } },
   },
   responses: { 201: { description: 'Assignment created' } },
+});
+
+export const modifierSelectionSchema = z.object({
+  groupId: z.string().uuid(),
+  groupName: z.string().max(150).optional(),
+  optionIds: z.array(z.string().uuid()).min(1),
+  optionNames: z.array(z.string().max(150)).optional(),
+});
+
+export const createCustomProductSchema = z.object({
+  name: z.string().min(1).max(255).optional(),
+  nameAr: z.string().max(255).optional(),
+  description: z.string().max(2000).optional(),
+  specifications: z.string().max(4000).optional(),
+  baseProductId: z.string().uuid().optional(),
+  modifierSelections: z.array(modifierSelectionSchema).optional(),
+}).refine((data) => Boolean(data.name?.trim() || data.baseProductId), {
+  message: 'Either name or baseProductId is required',
+});
+
+export const listCustomProductsQuerySchema = z.object({
+  status: z.enum(['pending', 'approved', 'rejected']).optional(),
+  companyId: z.string().uuid().optional(),
+});
+
+export const approveCustomProductSchema = z.object({
+  basePrice: z.number().positive(),
+  currency: z.string().length(3).optional(),
+  comment: z.string().max(500).optional(),
+});
+
+export const rejectCustomProductSchema = z.object({
+  reason: z.string().trim().min(3, 'Rejection reason is required').max(1000),
 });
 
 // ── Product nutrition (§31, feeds the budget meal planner) ───────────────────

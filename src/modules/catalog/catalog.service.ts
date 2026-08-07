@@ -1,5 +1,6 @@
 import { Prisma } from '@prisma/client';
 import { prisma } from '../../prisma/client';
+import * as customProductsService from './custom-products.service';
 import { ForbiddenError, NotFoundError, ConflictError } from '../../core/errors/AppError';
 import { isPrismaUniqueViolation } from '../../core/utils/prismaErrors';
 import { getRequestActor } from '../../core/middleware/requestContext';
@@ -29,7 +30,17 @@ function serializeCategory(category: {
   };
 }
 
-function serializeProduct(product: {
+function resolveProductImageUrl(product: {
+  image_url?: string | null;
+  media?: Array<{ url: string }>;
+}) {
+  if (product.image_url) return toPublicUploadUrl(product.image_url);
+  const mediaUrl = product.media?.[0]?.url;
+  return mediaUrl ? toPublicUploadUrl(mediaUrl) : null;
+}
+
+function serializeProduct(
+  product: {
   id: string;
   category_id: string;
   sku: string | null;
@@ -38,7 +49,7 @@ function serializeProduct(product: {
   description: string | null;
   image_url?: string | null;
   prep_time_mins?: number | null;
-  base_price: Prisma.Decimal;
+  base_price: Prisma.Decimal | null;
   currency: string;
   tax_class: string | null;
   is_active: boolean;
@@ -47,7 +58,9 @@ function serializeProduct(product: {
   erp_reference_id?: string | null;
   pos_reference_id?: string | null;
   attributes: Prisma.JsonValue;
-}) {
+},
+  media?: Array<{ url: string }>,
+) {
   return {
     id: product.id,
     categoryId: product.category_id,
@@ -55,9 +68,9 @@ function serializeProduct(product: {
     barcode: product.barcode,
     name: product.name,
     description: product.description,
-    imageUrl: product.image_url ? toPublicUploadUrl(product.image_url) : null,
+    imageUrl: resolveProductImageUrl({ image_url: product.image_url, media }),
     prepTimeMins: product.prep_time_mins ?? null,
-    basePrice: product.base_price.toString(),
+    basePrice: product.base_price?.toString() ?? null,
     currency: product.currency,
     taxClass: product.tax_class,
     isActive: product.is_active,
@@ -169,12 +182,25 @@ export async function deleteCategory(categoryId: string) {
 
 // ── Products ──────────────────────────────────────────────────────────────────
 
-export async function listProducts(query?: { categoryId?: string; page?: number; pageSize?: number }) {
+export async function listProducts(query?: {
+  categoryId?: string;
+  search?: string;
+  page?: number;
+  pageSize?: number;
+}) {
   const page = query?.page ?? 1;
   const pageSize = query?.pageSize ?? 50;
-  const where: Prisma.ProductWhereInput = {};
+  const where: Prisma.ProductWhereInput = { is_deleted: false };
   if (query?.categoryId) {
     where.category_id = query.categoryId;
+  }
+  const term = query?.search?.trim();
+  if (term) {
+    where.OR = [
+      { name: { contains: term, mode: 'insensitive' } },
+      { sku: { contains: term, mode: 'insensitive' } },
+      { barcode: { contains: term, mode: 'insensitive' } },
+    ];
   }
 
   const [items, totalItems] = await Promise.all([
@@ -183,23 +209,27 @@ export async function listProducts(query?: { categoryId?: string; page?: number;
       orderBy: [{ sort_order: 'asc' }, { name: 'asc' }],
       skip: (page - 1) * pageSize,
       take: pageSize,
+      include: { media: { where: { is_primary: true }, take: 1 } },
     }),
     prisma.product.count({ where }),
   ]);
 
   return {
-    items: items.map(serializeProduct),
+    items: items.map((p) => serializeProduct(p, p.media)),
     pagination: { page, pageSize, totalItems },
   };
 }
 
 export async function getProduct(productId: string, languageCode?: string) {
-  const product = await prisma.product.findFirst({ where: { id: productId } });
+  const product = await prisma.product.findFirst({
+    where: { id: productId, is_deleted: false },
+    include: { media: { where: { is_primary: true }, take: 1 } },
+  });
   if (!product) {
     throw new NotFoundError('Product not found');
   }
 
-  const serialized = serializeProduct(product);
+  const serialized = serializeProduct(product, product.media);
 
   if (languageCode) {
     const translatedName = await resolveTranslation('product', productId, 'name', languageCode);
@@ -872,6 +902,92 @@ export async function assignCompanyPricingList(input: {
   };
 }
 
+export async function deleteCompanyPricingAssignment(assignmentId: string) {
+  const row = await prisma.companyPricingListAssignment.findUnique({
+    where: { id: assignmentId },
+  });
+  if (!row) {
+    throw new NotFoundError('Pricing assignment not found');
+  }
+  await prisma.companyPricingListAssignment.delete({ where: { id: assignmentId } });
+}
+
+export async function listCompanyCatalogAssignments(query?: {
+  companyId?: string;
+  approvalStatus?: string;
+}) {
+  const now = new Date();
+  const companies = await prisma.company.findMany({
+    where: {
+      is_deleted: false,
+      ...(query?.companyId ? { id: query.companyId } : {}),
+      ...(query?.approvalStatus ? { approval_status: query.approvalStatus as never } : {}),
+    },
+    orderBy: { legal_name: 'asc' },
+    select: {
+      id: true,
+      legal_name: true,
+      trade_name: true,
+      approval_status: true,
+    },
+  });
+
+  return Promise.all(
+    companies.map(async (company) => {
+      const menuAssignment = await prisma.menuAssignment.findFirst({
+        where: {
+          scope_type: 'company',
+          scope_id: company.id,
+          is_active: true,
+          effective_from: { lte: now },
+          OR: [{ effective_to: null }, { effective_to: { gt: now } }],
+        },
+        orderBy: [{ priority: 'desc' }, { effective_from: 'desc' }],
+        include: { catalog_menu: { select: { id: true, name: true } } },
+      });
+
+      const pricingAssignment = await prisma.companyPricingListAssignment.findFirst({
+        where: {
+          company_id: company.id,
+          effective_from: { lte: now },
+          OR: [{ effective_to: null }, { effective_to: { gt: now } }],
+        },
+        orderBy: { effective_from: 'desc' },
+        include: {
+          pricing_list: { select: { id: true, name: true, currency: true } },
+        },
+      });
+
+      return {
+        companyId: company.id,
+        companyName: company.legal_name,
+        tradeName: company.trade_name,
+        approvalStatus: company.approval_status,
+        menu: menuAssignment
+          ? {
+              assignmentId: menuAssignment.id,
+              menuId: menuAssignment.catalog_menu.id,
+              menuName: menuAssignment.catalog_menu.name,
+              priority: menuAssignment.priority,
+              effectiveFrom: menuAssignment.effective_from.toISOString(),
+              effectiveTo: menuAssignment.effective_to?.toISOString() ?? null,
+            }
+          : null,
+        pricing: pricingAssignment
+          ? {
+              assignmentId: pricingAssignment.id,
+              pricingListId: pricingAssignment.pricing_list.id,
+              pricingListName: pricingAssignment.pricing_list.name,
+              currency: pricingAssignment.pricing_list.currency,
+              effectiveFrom: pricingAssignment.effective_from.toISOString(),
+              effectiveTo: pricingAssignment.effective_to?.toISOString() ?? null,
+            }
+          : null,
+      };
+    }),
+  );
+}
+
 // ── Company catalog menu (§8.3, §13) ──────────────────────────────────────────
 
 export async function getCompanyCatalogMenu() {
@@ -933,20 +1049,23 @@ export async function getCompanyCatalogMenu() {
               return null;
             }
 
-            const resolvedPrice = await menuResolver.resolveProductPrice(
-              actor.companyId,
-              product.id,
-            );
+            let resolvedPrice;
+            try {
+              resolvedPrice = await menuResolver.resolveProductPrice(actor.companyId, product.id);
+            } catch {
+              return null;
+            }
 
             const nameAr =
               product.translations.find((t) => t.language_code === 'ar')?.name ?? null;
+            const rawImage = product.image_url ?? product.media[0]?.url ?? null;
 
             return {
               id: product.id,
               name: product.name,
               nameAr,
               description: product.description,
-              imageUrl: product.image_url ?? product.media[0]?.url ?? null,
+              imageUrl: rawImage ? toPublicUploadUrl(rawImage) : null,
               prepTimeMins: product.prep_time_mins,
               sku: product.sku,
               visibility: product.visibility,
@@ -992,6 +1111,160 @@ export async function getCompanyCatalogMenu() {
       };
     }),
   );
+
+  const customProducts = await customProductsService.loadCompanyCustomMenuProducts(actor.companyId);
+  if (customProducts.length > 0) {
+    const customSectionProducts = await Promise.all(
+      customProducts.map(async (product) => {
+        const nameAr =
+          product.translations.find((t) => t.language_code === 'ar')?.name ?? null;
+        const orderable =
+          product.approval_status === 'approved' &&
+          product.is_active &&
+          product.base_price != null;
+
+        let price: string | null = null;
+        let currency = product.currency;
+        let priceSource: string | null = null;
+        if (orderable) {
+          const resolvedPrice = await menuResolver.resolveProductPrice(actor.companyId, product.id);
+          price = resolvedPrice.price.toString();
+          currency = resolvedPrice.currency;
+          priceSource = resolvedPrice.source;
+        }
+
+        return {
+          id: product.id,
+          name: product.name,
+          nameAr,
+          description: product.description,
+          imageUrl: product.image_url ?? product.media[0]?.url ?? null,
+          prepTimeMins: product.prep_time_mins,
+          sku: product.sku,
+          visibility: product.visibility,
+          sortOrder: product.sort_order,
+          isFeatured: false,
+          price,
+          currency,
+          priceSource,
+          isCustom: true,
+          approvalStatus: product.approval_status,
+          orderable,
+          rejectionReason: product.rejection_reason,
+          variants: product.variants.map((v) => ({
+            id: v.id,
+            variantName: v.variant_name,
+            priceAdjustment: v.price_adjustment.toString(),
+            isDefault: v.is_default,
+          })),
+          modifiers: product.option_groups.map((g) => ({
+            id: g.id,
+            name: g.name,
+            displayType: g.selection_type === 'multiple' ? 'checkbox' : 'radio',
+            required: g.is_required,
+            minSelect: g.min_select,
+            maxSelect: g.max_select,
+            options: g.options.map((o) => ({
+              id: o.id,
+              name: o.name,
+              priceExtra: o.price_adjustment.toString(),
+            })),
+          })),
+          translations: product.translations.map((t) => ({
+            languageCode: t.language_code,
+            name: t.name,
+            description: t.description,
+          })),
+        };
+      }),
+    );
+
+    sections.push({
+      id: customProductsService.CUSTOM_SECTION_CODE,
+      name: 'Custom Orders',
+      nameAr: 'طلبات مخصصة',
+      sortOrder: 9999,
+      isCustomSection: true,
+      products: customSectionProducts,
+    } as (typeof sections)[number]);
+  }
+
+  return {
+    menu: {
+      id: menu.id,
+      name: menu.name,
+      menuType: menu.menu_type,
+      description: menu.description,
+    },
+    sections,
+  };
+}
+
+/** Public general menu for guests (no auth). */
+export async function getPublicCatalogMenu() {
+  const menu = await prisma.catalogMenu.findFirst({
+    where: { menu_type: 'general', is_active: true },
+    orderBy: { created_at: 'asc' },
+    include: {
+      sections: {
+        orderBy: { sort_order: 'asc' },
+        include: {
+          products: {
+            orderBy: { sort_order: 'asc' },
+            include: {
+              product: {
+                include: {
+                  translations: true,
+                  variants: { where: { is_active: true } },
+                  option_groups: {
+                    include: { options: { where: { is_active: true }, orderBy: { sort_order: 'asc' } } },
+                  },
+                  media: { where: { is_primary: true }, take: 1 },
+                },
+              },
+            },
+          },
+        },
+      },
+    },
+  });
+
+  if (!menu) {
+    return { menu: null, sections: [] };
+  }
+
+  const sections = menu.sections.map((section) => {
+    const products = section.products
+      .map((cmp) => {
+        const product = cmp.product;
+        if (!product.is_active || product.is_deleted || product.visibility !== 'public') {
+          return null;
+        }
+        const nameAr = product.translations.find((t) => t.language_code === 'ar')?.name ?? null;
+        return {
+          id: product.id,
+          name: product.name,
+          nameAr,
+          description: product.description,
+          imageUrl: product.image_url ? toPublicUploadUrl(product.image_url) : product.media[0]?.url ?? null,
+          prepTimeMins: product.prep_time_mins,
+          sku: product.sku,
+          sortOrder: cmp.sort_order,
+          isFeatured: cmp.is_featured,
+          price: product.base_price?.toString() ?? '0',
+          currency: product.currency,
+          priceSource: 'base_price' as const,
+        };
+      })
+      .filter((p): p is NonNullable<typeof p> => p !== null);
+
+    return {
+      id: section.id,
+      name: section.name,
+      sortOrder: section.sort_order,
+      products,
+    };
+  });
 
   return {
     menu: {

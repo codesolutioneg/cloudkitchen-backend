@@ -9,7 +9,7 @@ export const SEED_ORDER_APPROVAL_WORKFLOW_ID = '00000000-0000-4000-8000-00000000
 
 export const CHICKEN_MEAL_NAME = 'Chicken Meal';
 export const CHICKEN_MEAL_UNIT_PRICE = '45.00';
-export const CHICKEN_MEAL_CURRENCY = 'SAR';
+export const CHICKEN_MEAL_CURRENCY = 'EGP';
 export const DEFAULT_VAT_RATE = 0.15;
 export const COMPANY_USER_PASSWORD = 'SecurePass123!';
 

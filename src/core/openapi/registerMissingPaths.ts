@@ -115,3 +115,64 @@ reg('get', '/api/v1/dashboard/companies/{id}', ['Companies'], 'Get company');
 reg('get', '/api/v1/dashboard/companies/{id}/documents', ['Companies'], 'List company documents');
 reg('get', '/api/v1/dashboard/roles/{id}', ['RBAC'], 'Get role');
 reg('get', '/api/v1/dashboard/users', ['RBAC'], 'List dashboard users');
+
+// ── July storefront work: ecommerce ordering, custom products, payments,
+// receipts, analytics and the assistant. Registered here so the §21.6 gate
+// covers them; replace with co-located registerPath entries when those
+// modules get their schema files fleshed out.
+const company = [{ companyBearerAuth: [] as string[] }];
+
+function regCompany(
+  method: 'get' | 'post' | 'put' | 'patch' | 'delete',
+  path: string,
+  tags: string[],
+  summary: string,
+) {
+  registry.registerPath({
+    method,
+    path,
+    tags,
+    summary,
+    security: company,
+    responses: {
+      200: { description: summary },
+      201: { description: summary },
+      204: { description: summary },
+    },
+  });
+}
+
+const store = ['Storefront'];
+regCompany('get', '/api/v1/company/catalog/custom-products', store, 'List company custom products');
+regCompany('post', '/api/v1/company/catalog/custom-products', store, 'Request a custom product');
+regCompany('get', '/api/v1/company/onboarding/status', store, 'Get onboarding status');
+regCompany('get', '/api/v1/company/onboarding/documents', store, 'List onboarding documents');
+regCompany('get', '/api/v1/company/orders/calendar', store, 'Company order calendar');
+regCompany('post', '/api/v1/company/orders/schedule', store, 'Schedule a recurring order');
+regCompany('get', '/api/v1/company/orders/{id}/payment', store, 'Get order payment');
+regCompany('post', '/api/v1/company/orders/{id}/payment-proof', store, 'Upload payment proof');
+regCompany('get', '/api/v1/company/orders/{id}/receipt', store, 'Download order receipt');
+
+reg('get', '/api/v1/dashboard/catalog/custom-products', cat, 'List custom product requests');
+reg('post', '/api/v1/dashboard/catalog/custom-products/{id}/approve', cat, 'Approve custom product');
+reg('post', '/api/v1/dashboard/catalog/custom-products/{id}/reject', cat, 'Reject custom product');
+reg('get', '/api/v1/dashboard/catalog/company-assignments', cat, 'List company pricing assignments');
+reg('delete', '/api/v1/dashboard/catalog/company-assignment/{id}', cat, 'Remove company pricing assignment');
+reg('post', '/api/v1/dashboard/menus/{id}/set-general', menus, 'Mark menu as the general menu');
+reg('patch', '/api/v1/dashboard/orders/{id}', ['Orders'], 'Update order');
+reg('get', '/api/v1/dashboard/orders/{id}/payment', ['Orders'], 'Get order payment');
+reg('post', '/api/v1/dashboard/orders/{id}/payment/approve', ['Orders'], 'Approve order payment');
+reg('post', '/api/v1/dashboard/orders/{id}/payment/reject', ['Orders'], 'Reject order payment');
+reg('get', '/api/v1/dashboard/orders/{id}/receipt', ['Receipts'], 'Download order receipt');
+reg('get', '/api/v1/dashboard/orders/{id}/fulfillment-qr', ['Fulfillment'], 'Get fulfillment QR payload');
+reg('get', '/api/v1/dashboard/analytics/overview', ['Analytics'], 'Dashboard analytics overview');
+reg('post', '/api/v1/dashboard/assistant/chat', ['Assistant'], 'Assistant chat turn');
+reg('get', '/api/v1/dashboard/approval-workflows/{id}', ['Approvals'], 'Get approval workflow');
+
+registry.registerPath({
+  method: 'get',
+  path: '/api/v1/public/catalog/menu',
+  tags: ['Storefront'],
+  summary: 'Public storefront menu',
+  responses: { 200: { description: 'Public storefront menu' } },
+});

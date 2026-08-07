@@ -19,6 +19,12 @@ router.post(
 );
 
 router.get(
+  '/company/onboarding/status',
+  companyAuthMiddleware,
+  asyncHandler(controller.getOnboardingStatus),
+);
+
+router.get(
   '/company/onboarding/addresses',
   companyAuthMiddleware,
   asyncHandler(controller.listAddresses),
@@ -51,6 +57,12 @@ router.post(
   companyAuthMiddleware,
   uploadMiddleware.single('file'),
   asyncHandler(controller.uploadDocument),
+);
+
+router.get(
+  '/company/onboarding/documents',
+  companyAuthMiddleware,
+  asyncHandler(controller.listDocuments),
 );
 
 export default router;

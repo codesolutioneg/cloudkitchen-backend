@@ -117,24 +117,27 @@ async function assertEntityAccess(
   }
 
   if (actor.type === 'company_user') {
-    if (entityType === 'company' && entityId === actor.companyId) {
-      return;
-    }
-
-    if (entityType === 'company') {
-      throw new ForbiddenError('Cannot access another company\'s files');
-    }
-
-    const company = await prisma.company.findFirst({
-      where: { id: actor.companyId, is_deleted: false },
-      select: { id: true },
-    });
-
-    if (!company) {
+    if (!actor.companyId) {
       throw new ForbiddenError('Company not found for caller');
     }
 
-    return;
+    if (entityType === 'company') {
+      if (entityId === actor.companyId) return;
+      throw new ForbiddenError('Cannot access another company\'s files');
+    }
+
+    if (entityType === 'order') {
+      const order = await prisma.order.findFirst({
+        where: { id: entityId, company_id: actor.companyId, is_deleted: false },
+        select: { id: true },
+      });
+      if (!order) {
+        throw new ForbiddenError('Cannot access this order');
+      }
+      return;
+    }
+
+    throw new ForbiddenError('Unsupported entity type for company user');
   }
 
   throw new ForbiddenError('Unsupported actor type');

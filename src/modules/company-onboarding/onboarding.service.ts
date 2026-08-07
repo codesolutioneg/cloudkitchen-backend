@@ -268,6 +268,31 @@ export async function uploadOnboardingDocument(
   );
 }
 
+export async function listOnboardingDocuments() {
+  const actor = getCompanyActorOrThrow();
+
+  const attachments = await prisma.fileAttachment.findMany({
+    where: { entity_type: 'company', entity_id: actor.companyId },
+    include: { file: true },
+    orderBy: { created_at: 'desc' },
+  });
+
+  return attachments.map((a) => ({
+    id: a.id,
+    companyId: actor.companyId,
+    attachmentType: a.attachment_type,
+    verificationStatus: a.verification_status,
+    verifiedBy: a.verified_by,
+    verifiedAt: a.verified_at?.toISOString() ?? null,
+    file: {
+      id: a.file.id,
+      fileName: a.file.file_name,
+      mimeType: a.file.mime_type,
+      url: a.file.url,
+    },
+  }));
+}
+
 export async function verifyCompanyDocument(
   companyId: string,
   attachmentId: string,

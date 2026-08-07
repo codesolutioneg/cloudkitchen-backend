@@ -53,6 +53,7 @@ export const inviteUserSchema = z.object({
   email: z.string().email(),
   department: z.string().max(100).optional(),
   temporaryPassword: z.string().min(8).optional(),
+  roleIds: z.array(z.string().uuid()).optional(),
 });
 
 export const assignRolesSchema = z.object({

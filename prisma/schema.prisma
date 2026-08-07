@@ -130,12 +130,14 @@ model Company {
   company_modules          CompanyModule[]
   company_configurations   CompanyConfiguration[]
   orders                   Order[]
+  order_series             OrderSeries[]
   workflows                Workflow[]
   approval_workflows       ApprovalWorkflow[]
   calendars                Calendar[]
   pricing_list_assignments CompanyPricingListAssignment[]
   dashboard_assignments    DashboardUserCompanyAssignment[]
   company_roles            CompanyRole[]
+  custom_products          Product[]                        @relation("CompanyCustomProducts")
   meal_plans               MealPlan[]
 
   @@index([status])
@@ -228,6 +230,7 @@ model CompanyUser {
   department         Department?                     @relation(fields: [department_id], references: [id], onDelete: SetNull)
   preferred_language Language?                       @relation(fields: [preferred_language_code], references: [code], onDelete: SetNull)
   orders_placed      Order[]                         @relation("OrderPlacedBy")
+  order_series       OrderSeries[]
   sessions           CompanyUserSession[]
   refresh_tokens     CompanyUserRefreshToken[]
   login_history      CompanyUserLoginHistory[]
@@ -714,23 +717,28 @@ model Category {
 }
 
 model Product {
-  id               String  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  category_id      String  @db.Uuid
-  sku              String? @unique @db.VarChar(100)
-  barcode          String? @db.VarChar(100)
-  name             String  @db.VarChar(255)
+  id               String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  category_id      String    @db.Uuid
+  sku              String?   @unique @db.VarChar(100)
+  barcode          String?   @db.VarChar(100)
+  name             String    @db.VarChar(255)
   description      String?
   image_url        String?
-  prep_time_mins   Int?    @default(25)
-  external_ref     String? @unique @db.VarChar(120)
-  base_price       Decimal @db.Decimal(12, 2)
-  currency         String  @db.Char(3)
-  tax_class        String? @db.VarChar(50)
-  is_active        Boolean @default(true)
-  visibility       String  @default("public") @db.VarChar(20) // public | restricted
-  sort_order       Int     @default(0)
-  erp_reference_id String? @db.VarChar(100)
-  pos_reference_id String? @db.VarChar(100)
+  prep_time_mins   Int?      @default(25)
+  external_ref     String?   @unique @db.VarChar(120)
+  base_price       Decimal?  @db.Decimal(12, 2)
+  currency         String    @db.Char(3)
+  tax_class        String?   @db.VarChar(50)
+  is_active        Boolean   @default(true)
+  visibility       String    @default("public") @db.VarChar(20) // public | restricted
+  company_id       String?   @db.Uuid
+  approval_status  String    @default("approved") @db.VarChar(20) // pending | approved | rejected
+  rejection_reason String?
+  approved_by      String?   @db.Uuid
+  approved_at      DateTime? @db.Timestamptz(6)
+  sort_order       Int       @default(0)
+  erp_reference_id String?   @db.VarChar(100)
+  pos_reference_id String?   @db.VarChar(100)
   search_metadata  Json?
   attributes       Json?
 
@@ -745,6 +753,7 @@ model Product {
   version         Int       @default(1)
 
   category              Category              @relation(fields: [category_id], references: [id], onDelete: Restrict)
+  company               Company?              @relation("CompanyCustomProducts", fields: [company_id], references: [id], onDelete: Restrict)
   translations          ProductTranslation[]
   media                 ProductMedia[]
   variants              ProductVariant[]
@@ -758,6 +767,7 @@ model Product {
   meal_plan_items       MealPlanItem[]
 
   @@index([category_id])
+  @@index([company_id, approval_status])
   @@map("products")
 }
 
@@ -1239,6 +1249,8 @@ model Order {
   delivery_address  CompanyAddress?         @relation("OrderDeliveryAddress", fields: [delivery_address_id], references: [id], onDelete: SetNull)
   parent_order      Order?                  @relation("OrderParent", fields: [parent_order_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
   child_orders      Order[]                 @relation("OrderParent")
+  series_id         String?                 @db.Uuid
+  series            OrderSeries?            @relation(fields: [series_id], references: [id], onDelete: SetNull)
 
   items            OrderItem[]
   status_history   OrderStatusHistory[]
@@ -1246,8 +1258,10 @@ model Order {
   approvals        OrderApproval[]
   delivery_details OrderDeliveryDetails?
   cancellation     OrderCancellation?
+  payment          OrderPayment?
 
   @@index([company_id, created_at(sort: Desc)])
+  @@index([series_id])
   @@map("orders")
 }
 
@@ -1369,6 +1383,43 @@ model OrderCancellation {
   order Order @relation(fields: [order_id], references: [id], onDelete: Cascade)
 
   @@map("order_cancellations")
+}
+
+model OrderSeries {
+  id                  String          @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  company_id          String          @db.Uuid
+  ordered_by_user_id  String          @db.Uuid
+  fulfillment_type    FulfillmentType
+  delivery_address_id String?         @db.Uuid
+  department_id       String?         @db.Uuid
+  preferred_time      String?         @db.VarChar(8)
+  source_channel      String          @default("web") @db.VarChar(20)
+  created_at          DateTime        @default(now()) @db.Timestamptz(6)
+
+  company    Company     @relation(fields: [company_id], references: [id], onDelete: Restrict)
+  ordered_by CompanyUser @relation(fields: [ordered_by_user_id], references: [id], onDelete: Restrict)
+  orders     Order[]
+
+  @@index([company_id, created_at(sort: Desc)])
+  @@map("order_series")
+}
+
+model OrderPayment {
+  id                  String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  order_id            String    @unique @db.Uuid
+  status              String    @db.VarChar(30) // awaiting_proof | pending_review | approved | rejected
+  proof_attachment_id String?   @db.Uuid
+  receipt_file_id     String?   @db.Uuid
+  reviewed_by         String?   @db.Uuid
+  reviewed_at         DateTime? @db.Timestamptz(6)
+  rejection_reason    String?
+  created_at          DateTime  @default(now()) @db.Timestamptz(6)
+  updated_at          DateTime  @updatedAt @db.Timestamptz(6)
+
+  order Order @relation(fields: [order_id], references: [id], onDelete: Cascade)
+
+  @@index([status])
+  @@map("order_payments")
 }
 
 // ============================================================================

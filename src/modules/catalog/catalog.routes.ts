@@ -8,10 +8,13 @@ import {
 import { requirePagePermission } from '../../core/middleware/requirePagePermission';
 import {
   addProductTagSchema,
+  approveCustomProductSchema,
   assignCompanyPricingListSchema,
+  listCompanyCatalogAssignmentsQuerySchema,
   availabilityIdParamsSchema,
   createAvailabilitySchema,
   createCategorySchema,
+  createCustomProductSchema,
   createOptionGroupSchema,
   createPriceSchema,
   createPricingListSchema,
@@ -19,9 +22,11 @@ import {
   createVariantSchema,
   groupIdParamsSchema,
   idParamsSchema,
+  listCustomProductsQuerySchema,
   listProductsQuerySchema,
   productLangParamsSchema,
   productTagParamsSchema,
+  rejectCustomProductSchema,
   mediaIdParamsSchema,
   setProductImageUrlSchema,
   updateAvailabilitySchema,
@@ -43,11 +48,31 @@ const canCreateCatalog = requirePagePermission('/dashboard/catalog', 'create');
 const canEditCatalog = requirePagePermission('/dashboard/catalog', 'edit');
 const canDeleteCatalog = requirePagePermission('/dashboard/catalog', 'delete');
 
+// Public catalog (no auth)
+router.get(
+  '/public/catalog/menu',
+  asyncHandler(controller.getPublicCatalogMenu),
+);
+
 // Company catalog
 router.get(
   '/company/catalog/menu',
   companyAuthMiddleware,
   asyncHandler(controller.getCompanyCatalogMenu),
+);
+
+router.post(
+  '/company/catalog/custom-products',
+  companyAuthMiddleware,
+  validate(createCustomProductSchema),
+  asyncHandler(controller.createCompanyCustomProduct),
+);
+
+router.get(
+  '/company/catalog/custom-products',
+  companyAuthMiddleware,
+  validate(listCustomProductsQuerySchema, 'query'),
+  asyncHandler(controller.listCompanyCustomProducts),
 );
 
 // Categories
@@ -309,6 +334,44 @@ router.post(
   canEditCatalog,
   validate(assignCompanyPricingListSchema),
   asyncHandler(controller.assignCompanyPricingList),
+);
+router.get(
+  '/dashboard/catalog/company-assignments',
+  dashAuth,
+  canViewCatalog,
+  validate(listCompanyCatalogAssignmentsQuerySchema, 'query'),
+  asyncHandler(controller.listCompanyCatalogAssignments),
+);
+router.delete(
+  '/dashboard/catalog/company-assignment/:id',
+  dashAuth,
+  canEditCatalog,
+  validate(idParamsSchema, 'params'),
+  asyncHandler(controller.deleteCompanyPricingAssignmentHandler),
+);
+
+router.get(
+  '/dashboard/catalog/custom-products',
+  dashAuth,
+  canViewCatalog,
+  validate(listCustomProductsQuerySchema, 'query'),
+  asyncHandler(controller.listDashboardCustomProducts),
+);
+router.post(
+  '/dashboard/catalog/custom-products/:id/approve',
+  dashAuth,
+  canEditCatalog,
+  validate(idParamsSchema, 'params'),
+  validate(approveCustomProductSchema),
+  asyncHandler(controller.approveCustomProduct),
+);
+router.post(
+  '/dashboard/catalog/custom-products/:id/reject',
+  dashAuth,
+  canEditCatalog,
+  validate(idParamsSchema, 'params'),
+  validate(rejectCustomProductSchema),
+  asyncHandler(controller.rejectCustomProduct),
 );
 
 export default router;

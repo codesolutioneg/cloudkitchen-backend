@@ -43,7 +43,7 @@ services:
       JWT_DASHBOARD_ACCESS_SECRET: dev_dashboard_access_secret_32chars_min
       JWT_DASHBOARD_REFRESH_SECRET: dev_dashboard_refresh_secret_32chars_min
       OTP_PEPPER: dev_otp_pepper_32_characters_min
-      CORS_ORIGINS: https://api.cloud-kitchen.code-solution.org,https://company.cloud-kitchen.code-solution.org,https://dashboard.cloud-kitchen.code-solution.org,http://localhost:3000,http://localhost:5173
+      CORS_ORIGINS: https://api.cloud-kitchen.code-solution.org,https://company.cloud-kitchen.code-solution.org,https://dashboard.cloud-kitchen.code-solution.org,https://cloud-kitchen.code-solution.org,https://www.cloud-kitchen.code-solution.org,http://localhost:3000,http://localhost:5173
       PUBLIC_API_URL: https://api.cloud-kitchen.code-solution.org
       UPLOAD_PATH: ./uploads
       FILE_STORAGE_PROVIDER: local
@@ -53,6 +53,11 @@ services:
       NOTIFICATIONS_PUSH_ENABLED: 'true'
       FIREBASE_PROJECT_ID: cloud-kitchen-27de2
       FIREBASE_SERVICE_ACCOUNT_PATH: /app/secrets/firebase-service-account.json
+      BUSINESS_DEFAULT_CURRENCY: EGP
+      BUSINESS_DEFAULT_TIMEZONE: Africa/Cairo
+      BUSINESS_DEFAULT_LANGUAGE: ar
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+      GEMINI_MODEL: ${GEMINI_MODEL:-gemini-2.5-flash}
     depends_on:
       postgres:
         condition: service_healthy

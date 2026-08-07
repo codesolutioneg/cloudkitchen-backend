@@ -27,6 +27,13 @@ router.get(
 );
 
 router.get(
+  '/dashboard/orders/:id/fulfillment-qr',
+  dashAuth,
+  validate(idParamsSchema, 'params'),
+  asyncHandler(controller.getDashboardFulfillmentQr),
+);
+
+router.get(
   '/dashboard/delivery/orders',
   dashAuth,
   canViewDelivery,

@@ -11,6 +11,8 @@ export const attachmentTypeSchema = z.enum([
   'logo',
   'authorization_letter',
   'bank_letter',
+  'payment_proof',
+  'receipt_pdf',
   'other',
 ]);
 

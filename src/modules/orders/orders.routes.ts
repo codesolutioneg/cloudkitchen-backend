@@ -10,14 +10,22 @@ import {
   addDashboardOrderNoteSchema,
   addOrderNoteSchema,
   approvalLevelParamsSchema,
+  approvePaymentSchema,
+  calendarQuerySchema,
   cancelOrderSchema,
   createOrderSchema,
   decideOrderApprovalSchema,
   idParamsSchema,
   listDashboardOrdersQuerySchema,
   listOrdersQuerySchema,
+  paymentProofSchema,
+  rejectPaymentSchema,
+  scheduleOrdersSchema,
   transitionOrderSchema,
+  updateDashboardOrderSchema,
 } from './orders.schemas';
+import * as paymentService from './order-payment.service';
+import * as scheduleService from './orders-schedule.service';
 import * as controller from './orders.controller';
 
 const router = Router();
@@ -27,6 +35,18 @@ const canViewOrders = requirePagePermission('/dashboard/orders', 'view');
 const canEditOrders = requirePagePermission('/dashboard/orders', 'edit');
 const canApproveOrders = requirePagePermission('/dashboard/orders', 'approve');
 
+router.post(
+  '/company/orders/schedule',
+  companyAuth,
+  validate(scheduleOrdersSchema),
+  asyncHandler(controller.scheduleOrders),
+);
+router.get(
+  '/company/orders/calendar',
+  companyAuth,
+  validate(calendarQuerySchema, 'query'),
+  asyncHandler(controller.getOrderCalendar),
+);
 router.post(
   '/company/orders',
   companyAuth,
@@ -73,6 +93,20 @@ router.post(
   asyncHandler(controller.decideCompanyOrderApproval),
 );
 
+router.post(
+  '/company/orders/:id/payment-proof',
+  companyAuth,
+  validate(idParamsSchema, 'params'),
+  validate(paymentProofSchema),
+  asyncHandler(controller.submitPaymentProof),
+);
+router.get(
+  '/company/orders/:id/payment',
+  companyAuth,
+  validate(idParamsSchema, 'params'),
+  asyncHandler(controller.getOrderPayment),
+);
+
 router.get(
   '/dashboard/orders',
   dashAuth,
@@ -86,6 +120,14 @@ router.get(
   canViewOrders,
   validate(idParamsSchema, 'params'),
   asyncHandler(controller.getDashboardOrder),
+);
+router.patch(
+  '/dashboard/orders/:id',
+  dashAuth,
+  canEditOrders,
+  validate(idParamsSchema, 'params'),
+  validate(updateDashboardOrderSchema),
+  asyncHandler(controller.updateDashboardOrder),
 );
 router.post(
   '/dashboard/orders/:id/transitions',
@@ -110,6 +152,30 @@ router.post(
   validate(approvalLevelParamsSchema, 'params'),
   validate(decideOrderApprovalSchema),
   asyncHandler(controller.decideDashboardOrderApproval),
+);
+
+router.post(
+  '/dashboard/orders/:id/payment/approve',
+  dashAuth,
+  canApproveOrders,
+  validate(idParamsSchema, 'params'),
+  validate(approvePaymentSchema),
+  asyncHandler(controller.approvePayment),
+);
+router.post(
+  '/dashboard/orders/:id/payment/reject',
+  dashAuth,
+  canApproveOrders,
+  validate(idParamsSchema, 'params'),
+  validate(rejectPaymentSchema),
+  asyncHandler(controller.rejectPayment),
+);
+router.get(
+  '/dashboard/orders/:id/payment',
+  dashAuth,
+  canViewOrders,
+  validate(idParamsSchema, 'params'),
+  asyncHandler(controller.getOrderPayment),
 );
 
 export default router;
