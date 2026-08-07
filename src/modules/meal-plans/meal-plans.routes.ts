@@ -1,7 +1,10 @@
 import { Router } from 'express';
 import { asyncHandler } from '../../core/middleware/asyncHandler';
 import { validate } from '../../core/middleware/validate';
-import { dashboardAuthMiddleware } from '../../core/middleware/companyAuthMiddleware';
+import {
+  companyAuthMiddleware,
+  dashboardAuthMiddleware,
+} from '../../core/middleware/companyAuthMiddleware';
 import { requirePagePermission } from '../../core/middleware/requirePagePermission';
 import {
   addItemSchema,
@@ -11,8 +14,10 @@ import {
   generatePlanSchema,
   itemIdParamsSchema,
   listPlansQuerySchema,
+  confirmPlanSchema,
   planIdParamsSchema,
   previewPlanSchema,
+  swapItemSchema,
   updateItemSchema,
   updatePlanSchema,
 } from './meal-plans.schemas';
@@ -125,6 +130,37 @@ router.delete(
   canDelete,
   validate(itemIdParamsSchema, 'params'),
   asyncHandler(controller.removeItem),
+);
+
+// ── Company-facing: the client reviews, swaps and signs off ──────────────────
+const companyAuth = companyAuthMiddleware;
+
+router.get('/company/meal-plans', companyAuth, asyncHandler(controller.listCompanyPlans));
+router.get(
+  '/company/meal-plans/:id',
+  companyAuth,
+  validate(planIdParamsSchema, 'params'),
+  asyncHandler(controller.getCompanyPlan),
+);
+router.get(
+  '/company/meal-plans/:id/days/:dayId/items/:itemId/options',
+  companyAuth,
+  validate(itemIdParamsSchema, 'params'),
+  asyncHandler(controller.listSwapOptions),
+);
+router.post(
+  '/company/meal-plans/:id/days/:dayId/items/:itemId/swap',
+  companyAuth,
+  validate(itemIdParamsSchema, 'params'),
+  validate(swapItemSchema),
+  asyncHandler(controller.swapCompanyPlanItem),
+);
+router.post(
+  '/company/meal-plans/:id/confirm',
+  companyAuth,
+  validate(planIdParamsSchema, 'params'),
+  validate(confirmPlanSchema),
+  asyncHandler(controller.confirmCompanyPlan),
 );
 
 export default router;

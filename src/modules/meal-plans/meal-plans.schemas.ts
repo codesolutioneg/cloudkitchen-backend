@@ -481,3 +481,116 @@ registry.registerPath({
   request: { params: itemIdParamsSchema },
   responses: { 204: { description: 'Item removed' } },
 });
+
+// ── Company-facing (§31) ──────────────────────────────────────────────────────
+
+export const swapItemSchema = z.object({ productId: z.string().uuid() });
+
+export const confirmPlanSchema = z.object({
+  fulfillmentType: z.enum(['delivery', 'pickup']),
+  deliveryAddressId: z.string().uuid().optional(),
+  departmentId: z.string().uuid().optional(),
+});
+
+export const swapOptionSchema = z
+  .object({
+    productId: z.string().uuid(),
+    name: z.string(),
+    componentType: z.string(),
+    unitPrice: z.string(),
+    currency: z.string(),
+    caloriesKcal: z.string(),
+    proteinG: z.string(),
+    carbsG: z.string(),
+    fatG: z.string(),
+    allergens: z.array(z.string()),
+    isCurrent: z.boolean(),
+    withinBudget: z.boolean(),
+    resultingCostPerHead: z.string(),
+    resultingProteinG: z.string(),
+    resultingCarbsG: z.string(),
+    resultingCaloriesKcal: z.string(),
+    warnings: z.array(planWarningSchema),
+  })
+  .openapi('MealPlanSwapOption');
+
+const companyBearer = [{ companyBearerAuth: [] }];
+
+registry.registerPath({
+  method: 'get',
+  path: '/api/v1/company/meal-plans',
+  tags: ['Meal Plans'],
+  summary: 'List my company meal plans',
+  security: companyBearer,
+  responses: {
+    200: {
+      description: 'Meal plans released to this company',
+      content: {
+        'application/json': { schema: SuccessEnvelopeSchema(z.array(mealPlanSchema)) },
+      },
+    },
+  },
+});
+
+registry.registerPath({
+  method: 'get',
+  path: '/api/v1/company/meal-plans/{id}',
+  tags: ['Meal Plans'],
+  summary: 'Get one of my company meal plans',
+  security: companyBearer,
+  request: { params: planIdParamsSchema },
+  responses: {
+    200: {
+      description: 'Meal plan detail',
+      content: { 'application/json': { schema: SuccessEnvelopeSchema(mealPlanDetailSchema) } },
+    },
+  },
+});
+
+registry.registerPath({
+  method: 'get',
+  path: '/api/v1/company/meal-plans/{id}/days/{dayId}/items/{itemId}/options',
+  tags: ['Meal Plans'],
+  summary: 'List the swap options for a plan item',
+  security: companyBearer,
+  request: { params: itemIdParamsSchema },
+  responses: {
+    200: {
+      description: 'Alternatives with the day totals each one would produce',
+      content: {
+        'application/json': { schema: SuccessEnvelopeSchema(z.array(swapOptionSchema)) },
+      },
+    },
+  },
+});
+
+registry.registerPath({
+  method: 'post',
+  path: '/api/v1/company/meal-plans/{id}/days/{dayId}/items/{itemId}/swap',
+  tags: ['Meal Plans'],
+  summary: 'Choose a different product for a plan item',
+  security: companyBearer,
+  request: {
+    params: itemIdParamsSchema,
+    body: { content: { 'application/json': { schema: swapItemSchema } } },
+  },
+  responses: {
+    200: {
+      description: 'Day after the swap',
+      content: { 'application/json': { schema: SuccessEnvelopeSchema(mealPlanDaySchema) } },
+    },
+  },
+});
+
+registry.registerPath({
+  method: 'post',
+  path: '/api/v1/company/meal-plans/{id}/confirm',
+  tags: ['Meal Plans'],
+  summary: 'Confirm the plan and place the orders',
+  security: companyBearer,
+  request: {
+    params: planIdParamsSchema,
+    body: { content: { 'application/json': { schema: confirmPlanSchema } } },
+  },
+  responses: { 201: { description: 'Plan confirmed and orders created' } },
+});

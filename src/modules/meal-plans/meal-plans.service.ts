@@ -1,4 +1,4 @@
-import { Prisma } from '@prisma/client';
+import { FulfillmentType, Prisma } from '@prisma/client';
 import { Decimal } from '@prisma/client/runtime/library';
 import { prisma } from '../../prisma/client';
 import {
@@ -10,6 +10,7 @@ import {
 import { getRequestActor } from '../../core/middleware/requestContext';
 import { getDashboardCompanyScopeFilter } from '../../engines/companyScopeResolver';
 import { menuResolver } from '../../engines/menuResolver';
+import * as ordersService from '../orders/orders.service';
 import {
   buildMealPlan,
   enumerateDates,
@@ -186,11 +187,17 @@ export async function resolveCandidates(
     nutrition: { isNot: null },
   };
 
-  if (sourceMenuId) {
+  // Without an explicit source menu, plan from the company's own assigned menu.
+  // Anything else would let the planner pick products the company cannot order,
+  // and the plan would only fail at confirmation.
+  const menuId =
+    sourceMenuId ?? (await menuResolver.resolveEffectiveMenu(companyId, null, null, atInstant));
+
+  if (menuId) {
     productFilter = {
       ...productFilter,
       catalog_menu_products: {
-        some: { section: { catalog_menu_id: sourceMenuId } },
+        some: { section: { catalog_menu_id: menuId } },
       },
     };
   }
@@ -395,7 +402,14 @@ export async function listPlans(query: {
   return { items: rows.map(serializePlan), pagination: { page, pageSize, totalItems } };
 }
 
-async function loadPlanOrThrow(planId: string) {
+/**
+ * Fetches a plan without any authorisation check.
+ *
+ * For internal recomputation only, where the caller has already established
+ * that this actor may touch this plan. Entry points must use
+ * {@link loadPlanOrThrow} (dashboard) or loadCompanyPlanOrThrow (company).
+ */
+async function loadPlanRow(planId: string) {
   const plan = await prisma.mealPlan.findFirst({
     where: { id: planId, is_deleted: false },
     include: { company: { select: { legal_name: true } } },
@@ -403,6 +417,11 @@ async function loadPlanOrThrow(planId: string) {
   if (!plan) {
     throw new NotFoundError('Meal plan not found');
   }
+  return plan;
+}
+
+async function loadPlanOrThrow(planId: string) {
+  const plan = await loadPlanRow(planId);
   await assertCompanyInScope(plan.company_id);
   return plan;
 }
@@ -792,7 +811,7 @@ async function assertPlanEditable(planId: string) {
  * stored totals never drift from the item rows.
  */
 async function recalculateDay(planId: string, dayId: string): Promise<void> {
-  const plan = await loadPlanOrThrow(planId);
+  const plan = await loadPlanRow(planId);
   const day = await prisma.mealPlanDay.findFirstOrThrow({
     where: { id: dayId, meal_plan_id: planId },
     include: { items: true },
@@ -1031,4 +1050,302 @@ export async function removeItem(planId: string, dayId: string, itemId: string) 
 
   await prisma.mealPlanItem.delete({ where: { id: itemId } });
   await recalculateDay(planId, dayId);
+}
+
+// ── Company-facing surface (§31) ──────────────────────────────────────────────
+//
+// The kitchen proposes a plan; the client swaps components inside the budget
+// and signs off. Everything here is scoped to the caller's own company and
+// never trusts a companyId from the request.
+
+function getCompanyActorOrThrow() {
+  const actor = getRequestActor();
+  if (actor?.type !== 'company_user' || !actor.companyId) {
+    throw new ForbiddenError('Company authentication required');
+  }
+  return { ...actor, companyId: actor.companyId };
+}
+
+/** Only plans the kitchen has released; drafts stay internal. */
+const CLIENT_VISIBLE_STATUSES = ['generated', 'approved'];
+
+async function loadCompanyPlanOrThrow(planId: string, companyId: string) {
+  const plan = await prisma.mealPlan.findFirst({
+    where: {
+      id: planId,
+      company_id: companyId,
+      is_deleted: false,
+      status: { in: CLIENT_VISIBLE_STATUSES },
+    },
+    include: { company: { select: { legal_name: true } } },
+  });
+  if (!plan) {
+    throw new NotFoundError('Meal plan not found');
+  }
+  return plan;
+}
+
+export async function listCompanyPlans() {
+  const actor = getCompanyActorOrThrow();
+  const rows = await prisma.mealPlan.findMany({
+    where: {
+      company_id: actor.companyId,
+      is_deleted: false,
+      status: { in: CLIENT_VISIBLE_STATUSES },
+    },
+    include: { company: { select: { legal_name: true } } },
+    orderBy: [{ start_date: 'desc' }],
+  });
+  return rows.map(serializePlan);
+}
+
+export async function getCompanyPlan(planId: string) {
+  const actor = getCompanyActorOrThrow();
+  const plan = await loadCompanyPlanOrThrow(planId, actor.companyId);
+  const days = await prisma.mealPlanDay.findMany({
+    where: { meal_plan_id: planId },
+    include: { items: { include: { product: { select: { name: true } } } } },
+    orderBy: { plan_date: 'asc' },
+  });
+  return { ...serializePlan(plan), days: days.map(serializeDay) };
+}
+
+/**
+ * The swap menu for one item: every other product of the same component, with
+ * the day total each choice would produce and whether it stays in budget.
+ *
+ * @param planId Plan the day belongs to.
+ * @param dayId Day being edited.
+ * @param itemId Item the client wants to replace.
+ * @returns Alternatives ordered cheapest first, affordable ones first.
+ */
+export async function listSwapOptions(planId: string, dayId: string, itemId: string) {
+  const actor = getCompanyActorOrThrow();
+  const plan = await loadCompanyPlanOrThrow(planId, actor.companyId);
+
+  const day = await prisma.mealPlanDay.findFirst({
+    where: { id: dayId, meal_plan_id: planId },
+    include: { items: true },
+  });
+  if (!day) {
+    throw new NotFoundError('Plan day not found');
+  }
+  const item = day.items.find((row) => row.id === itemId);
+  if (!item) {
+    throw new NotFoundError('Plan item not found');
+  }
+
+  const candidates = await resolveCandidates(
+    plan.company_id,
+    plan.source_menu_id,
+    plan.pricing_list_id,
+  );
+
+  const budget = Number(plan.budget_per_meal);
+  const targets = targetsOf(plan);
+  const others = day.items.filter((row) => row.id !== itemId);
+  const base = others.reduce(
+    (acc, row) => ({
+      cost: acc.cost + Number(row.line_total),
+      caloriesKcal: acc.caloriesKcal + Number(row.calories_kcal),
+      proteinG: acc.proteinG + Number(row.protein_g),
+      carbsG: acc.carbsG + Number(row.carbs_g),
+      fatG: acc.fatG + Number(row.fat_g),
+    }),
+    { cost: 0, caloriesKcal: 0, proteinG: 0, carbsG: 0, fatG: 0 },
+  );
+
+  const options = candidates
+    .filter((candidate) => candidate.componentType === item.component_type)
+    .filter((candidate) => !plan.exclude_allergens.some((a) => candidate.allergens.includes(a)))
+    .map((candidate) => {
+      const totals = {
+        cost: base.cost + candidate.unitPrice * item.quantity,
+        caloriesKcal: base.caloriesKcal + candidate.caloriesKcal * item.quantity,
+        proteinG: base.proteinG + candidate.proteinG * item.quantity,
+        carbsG: base.carbsG + candidate.carbsG * item.quantity,
+        fatG: base.fatG + candidate.fatG * item.quantity,
+      };
+      const warnings = evaluateDayWarnings(isoDate(day.plan_date), totals, budget, targets);
+      return {
+        productId: candidate.productId,
+        name: candidate.name,
+        componentType: candidate.componentType,
+        unitPrice: candidate.unitPrice.toFixed(2),
+        currency: plan.currency,
+        caloriesKcal: candidate.caloriesKcal.toFixed(2),
+        proteinG: candidate.proteinG.toFixed(2),
+        carbsG: candidate.carbsG.toFixed(2),
+        fatG: candidate.fatG.toFixed(2),
+        allergens: candidate.allergens,
+        isCurrent: candidate.productId === item.product_id,
+        withinBudget: totals.cost <= budget,
+        resultingCostPerHead: totals.cost.toFixed(2),
+        resultingProteinG: totals.proteinG.toFixed(2),
+        resultingCarbsG: totals.carbsG.toFixed(2),
+        resultingCaloriesKcal: totals.caloriesKcal.toFixed(2),
+        warnings,
+      };
+    })
+    .sort((a, b) => {
+      if (a.withinBudget !== b.withinBudget) return a.withinBudget ? -1 : 1;
+      return Number(a.unitPrice) - Number(b.unitPrice);
+    });
+
+  return options;
+}
+
+/**
+ * Applies a client's choice to one slot.
+ *
+ * The budget is the one hard rule: a swap that would take the day over the
+ * agreed per-head figure is refused. Nutrition drift is allowed but surfaces
+ * as a warning on the day.
+ */
+export async function swapCompanyPlanItem(
+  planId: string,
+  dayId: string,
+  itemId: string,
+  productId: string,
+) {
+  const actor = getCompanyActorOrThrow();
+  const plan = await loadCompanyPlanOrThrow(planId, actor.companyId);
+  if (plan.status === 'approved') {
+    throw new ConflictError('This plan is already confirmed and cannot be changed');
+  }
+
+  const day = await prisma.mealPlanDay.findFirst({
+    where: { id: dayId, meal_plan_id: planId },
+    include: { items: true },
+  });
+  if (!day) {
+    throw new NotFoundError('Plan day not found');
+  }
+  const item = day.items.find((row) => row.id === itemId);
+  if (!item) {
+    throw new NotFoundError('Plan item not found');
+  }
+
+  const candidates = await resolveCandidates(
+    plan.company_id,
+    plan.source_menu_id,
+    plan.pricing_list_id,
+  );
+  const choice = candidates.find((candidate) => candidate.productId === productId);
+  if (!choice) {
+    throw new BadRequestError('That product is not available for this plan');
+  }
+  if (choice.componentType !== item.component_type) {
+    throw new BadRequestError(
+      `That product is a ${choice.componentType}, but this slot is a ${item.component_type}`,
+    );
+  }
+  if (plan.exclude_allergens.some((a) => choice.allergens.includes(a))) {
+    throw new BadRequestError('That product contains an allergen excluded from this plan');
+  }
+
+  const othersCost = day.items
+    .filter((row) => row.id !== itemId)
+    .reduce((sum, row) => sum + Number(row.line_total), 0);
+  const newCost = othersCost + choice.unitPrice * item.quantity;
+  if (newCost > Number(plan.budget_per_meal)) {
+    throw new BadRequestError(
+      `That choice would cost ${newCost.toFixed(2)} per head, over the agreed ${Number(plan.budget_per_meal).toFixed(2)} budget`,
+    );
+  }
+
+  const quantity = item.quantity;
+  await prisma.mealPlanItem.update({
+    where: { id: itemId },
+    data: {
+      product_id: choice.productId,
+      variant_id: choice.variantId ?? null,
+      unit_price: new Decimal(choice.unitPrice),
+      line_total: new Decimal(choice.unitPrice * quantity),
+      calories_kcal: new Decimal(choice.caloriesKcal * quantity),
+      protein_g: new Decimal(choice.proteinG * quantity),
+      carbs_g: new Decimal(choice.carbsG * quantity),
+      fat_g: new Decimal(choice.fatG * quantity),
+      // A client pick must survive a regenerate by the kitchen.
+      is_locked: true,
+    },
+  });
+
+  await recalculateDay(planId, dayId);
+  return serializeDayById(dayId);
+}
+
+/**
+ * Client sign-off. Locks the plan and turns each day into a real order.
+ *
+ * Orders go through the normal ordering service, so pricing, VAT, ordering
+ * rules and the order workflow behave exactly as they do for a manual order.
+ * Idempotent: a plan that already produced orders is not billed twice.
+ *
+ * @param planId Plan being confirmed.
+ * @param input Fulfilment choice applied to every day of the plan.
+ * @returns The confirmed plan plus the orders that were created.
+ */
+export async function confirmCompanyPlan(
+  planId: string,
+  input: { fulfillmentType: 'delivery' | 'pickup'; deliveryAddressId?: string; departmentId?: string },
+) {
+  const actor = getCompanyActorOrThrow();
+  const plan = await loadCompanyPlanOrThrow(planId, actor.companyId);
+
+  const alreadyOrdered = await prisma.order.count({
+    where: { meal_plan_id: planId, is_deleted: false },
+  });
+  if (alreadyOrdered > 0) {
+    throw new ConflictError('This plan has already been confirmed and ordered');
+  }
+
+  const days = await prisma.mealPlanDay.findMany({
+    where: { meal_plan_id: planId },
+    include: { items: true },
+    orderBy: { plan_date: 'asc' },
+  });
+  if (days.length === 0) {
+    throw new BadRequestError('This plan has no days to order');
+  }
+  if (input.fulfillmentType === 'delivery' && !input.deliveryAddressId) {
+    throw new BadRequestError('A delivery address is required for delivery orders');
+  }
+
+  const createdOrderIds: string[] = [];
+  for (const day of days) {
+    if (day.items.length === 0) continue;
+    const order = await ordersService.createOrder({
+      items: day.items.map((item) => ({
+        productId: item.product_id,
+        variantId: item.variant_id ?? undefined,
+        // One serving per head, per component.
+        quantity: item.quantity * plan.headcount,
+      })),
+      requestedDeliveryAt: day.plan_date.toISOString(),
+      fulfillmentType: input.fulfillmentType as FulfillmentType,
+      deliveryAddressId: input.deliveryAddressId,
+      departmentId: input.departmentId,
+      sourceChannel: 'meal_plan',
+    });
+    createdOrderIds.push(order.id);
+  }
+
+  await prisma.$transaction([
+    prisma.order.updateMany({
+      where: { id: { in: createdOrderIds } },
+      data: { meal_plan_id: planId },
+    }),
+    prisma.mealPlan.update({
+      where: { id: planId },
+      data: {
+        status: 'approved',
+        confirmed_at: new Date(),
+        confirmed_by: actor.id,
+        approved_at: plan.approved_at ?? new Date(),
+      },
+    }),
+  ]);
+
+  return { plan: await getCompanyPlan(planId), orderIds: createdOrderIds };
 }

@@ -76,3 +76,36 @@ export async function removeItem(req: Request, res: Response): Promise<void> {
   await service.removeItem(req.params.id!, req.params.dayId!, req.params.itemId!);
   res.status(204).send();
 }
+
+// ── Company-facing ────────────────────────────────────────────────────────────
+
+export async function listCompanyPlans(_req: Request, res: Response): Promise<void> {
+  sendSuccess(res, await service.listCompanyPlans());
+}
+
+export async function getCompanyPlan(req: Request, res: Response): Promise<void> {
+  sendSuccess(res, await service.getCompanyPlan(req.params.id!));
+}
+
+export async function listSwapOptions(req: Request, res: Response): Promise<void> {
+  sendSuccess(
+    res,
+    await service.listSwapOptions(req.params.id!, req.params.dayId!, req.params.itemId!),
+  );
+}
+
+export async function swapCompanyPlanItem(req: Request, res: Response): Promise<void> {
+  sendSuccess(
+    res,
+    await service.swapCompanyPlanItem(
+      req.params.id!,
+      req.params.dayId!,
+      req.params.itemId!,
+      req.body.productId,
+    ),
+  );
+}
+
+export async function confirmCompanyPlan(req: Request, res: Response): Promise<void> {
+  sendSuccess(res, await service.confirmCompanyPlan(req.params.id!, req.body), 201);
+}

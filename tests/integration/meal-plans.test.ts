@@ -490,3 +490,373 @@ describe('Budget meal planning', () => {
     expect(res.status).toBe(401);
   });
 });
+
+describe('Company meal plan self-service', () => {
+  let dashToken = '';
+  let companyToken = '';
+  let otherCompanyToken = '';
+  let companyId = '';
+  let categoryId = '';
+  const suffix = `mpc-${Date.now()}`;
+  const products: Record<string, string> = {};
+
+  async function seedProduct(
+    name: string,
+    price: string,
+    nutrition: { componentType: string; caloriesKcal: number; proteinG: number; carbsG: number; fatG: number },
+  ) {
+    const created = await request(app)
+      .post('/api/v1/dashboard/catalog/products')
+      .set(bearer(dashToken))
+      .send({ categoryId, name, basePrice: price, currency: 'EGP', visibility: 'public' });
+    await request(app)
+      .put(`/api/v1/dashboard/catalog/products/${created.body.data.id}/nutrition`)
+      .set(bearer(dashToken))
+      .send({ ...nutrition, allergens: [] });
+    return created.body.data.id as string;
+  }
+
+  beforeAll(async () => {
+    const dash = await loginDashboardUser();
+    dashToken = dash.body.data.accessToken as string;
+
+    const reg = await registerCompany(suffix);
+    companyId = reg.body.data.companyId as string;
+    const login = await request(app)
+      .post('/api/v1/auth/company/login')
+      .send({ email: `user-${suffix}@example.com`, password: 'SecurePass123!' });
+    companyToken = login.body.data.accessToken as string;
+
+    const otherSuffix = `${suffix}-other`;
+    await registerCompany(otherSuffix);
+    const otherLogin = await request(app)
+      .post('/api/v1/auth/company/login')
+      .send({ email: `user-${otherSuffix}@example.com`, password: 'SecurePass123!' });
+    otherCompanyToken = otherLogin.body.data.accessToken as string;
+
+    const category = await request(app)
+      .post('/api/v1/dashboard/catalog/categories')
+      .set(bearer(dashToken))
+      .send({ name: `Canteen ${suffix}`, slug: `canteen-${suffix}` });
+    categoryId = category.body.data.id as string;
+
+    products.cheapProtein = await seedProduct(`Protein cheap ${suffix}`, '9.00', {
+      componentType: 'protein', caloriesKcal: 250, proteinG: 30, carbsG: 5, fatG: 8,
+    });
+    products.pricyProtein = await seedProduct(`Protein pricy ${suffix}`, '15.00', {
+      componentType: 'protein', caloriesKcal: 420, proteinG: 48, carbsG: 9, fatG: 15,
+    });
+    products.hugeProtein = await seedProduct(`Protein huge ${suffix}`, '95.00', {
+      componentType: 'protein', caloriesKcal: 700, proteinG: 60, carbsG: 12, fatG: 40,
+    });
+    products.carb = await seedProduct(`Carb ${suffix}`, '5.00', {
+      componentType: 'carb', caloriesKcal: 300, proteinG: 6, carbsG: 60, fatG: 3,
+    });
+  });
+
+  async function createGeneratedPlan() {
+    const created = await request(app)
+      .post('/api/v1/dashboard/meal-plans')
+      .set(bearer(dashToken))
+      .send({
+        companyId,
+        name: `Client plan ${suffix}`,
+        startDate: '2026-06-01',
+        endDate: '2026-06-02',
+        headcount: 50,
+        budgetPerMeal: '25.00',
+        currency: 'EGP',
+        slots: [
+          { componentType: 'protein', quantity: 1 },
+          { componentType: 'carb', quantity: 1 },
+        ],
+        minProteinG: 30,
+        varietyWindowDays: 0,
+      });
+    const planId = created.body.data.id as string;
+    await request(app)
+      .post(`/api/v1/dashboard/meal-plans/${planId}/generate`)
+      .set(bearer(dashToken))
+      .send({});
+    return planId;
+  }
+
+  it('hides draft plans from the client and shows released ones', async () => {
+    const draft = await request(app)
+      .post('/api/v1/dashboard/meal-plans')
+      .set(bearer(dashToken))
+      .send({
+        companyId,
+        name: `Draft ${suffix}`,
+        startDate: '2026-07-01',
+        endDate: '2026-07-02',
+        headcount: 10,
+        budgetPerMeal: '25.00',
+        currency: 'EGP',
+        slots: [{ componentType: 'protein', quantity: 1 }],
+      });
+    const draftId = draft.body.data.id as string;
+    const releasedId = await createGeneratedPlan();
+
+    const list = await request(app)
+      .get('/api/v1/company/meal-plans')
+      .set(bearer(companyToken));
+
+    expect(list.status).toBe(200);
+    const ids = list.body.data.map((p: { id: string }) => p.id);
+    expect(ids).toContain(releasedId);
+    expect(ids).not.toContain(draftId);
+  });
+
+  it('does not leak another company plan', async () => {
+    const planId = await createGeneratedPlan();
+    const res = await request(app)
+      .get(`/api/v1/company/meal-plans/${planId}`)
+      .set(bearer(otherCompanyToken));
+    expect(res.status).toBe(404);
+  });
+
+  it('offers swap options flagged by affordability', async () => {
+    const planId = await createGeneratedPlan();
+    const plan = await request(app)
+      .get(`/api/v1/company/meal-plans/${planId}`)
+      .set(bearer(companyToken));
+    const day = plan.body.data.days[0];
+    const proteinItem = day.items.find((i: { componentType: string }) => i.componentType === 'protein');
+
+    const options = await request(app)
+      .get(`/api/v1/company/meal-plans/${planId}/days/${day.id}/items/${proteinItem.id}/options`)
+      .set(bearer(companyToken));
+
+    expect(options.status).toBe(200);
+    const byId = Object.fromEntries(
+      options.body.data.map((o: { productId: string }) => [o.productId, o]),
+    );
+    expect(byId[products.pricyProtein!].withinBudget).toBe(true);
+    expect(byId[products.hugeProtein!].withinBudget).toBe(false);
+    // Affordable options are listed before unaffordable ones.
+    expect(options.body.data[0].withinBudget).toBe(true);
+  });
+
+  it('applies an affordable swap and recomputes the day', async () => {
+    const planId = await createGeneratedPlan();
+    const plan = await request(app)
+      .get(`/api/v1/company/meal-plans/${planId}`)
+      .set(bearer(companyToken));
+    const day = plan.body.data.days[0];
+    const proteinItem = day.items.find((i: { componentType: string }) => i.componentType === 'protein');
+
+    const swap = await request(app)
+      .post(`/api/v1/company/meal-plans/${planId}/days/${day.id}/items/${proteinItem.id}/swap`)
+      .set(bearer(companyToken))
+      .send({ productId: products.pricyProtein });
+
+    expect(swap.status).toBe(200);
+    const swapped = swap.body.data.items.find(
+      (i: { componentType: string }) => i.componentType === 'protein',
+    );
+    expect(swapped.productId).toBe(products.pricyProtein);
+    expect(swapped.isLocked).toBe(true);
+    expect(Number(swapped.unitPrice)).toBeCloseTo(15, 2);
+
+    // The day total is the other slots plus the newly chosen protein.
+    const othersCost = day.items
+      .filter((i: { componentType: string }) => i.componentType !== 'protein')
+      .reduce((sum: number, i: { lineTotal: string }) => sum + Number(i.lineTotal), 0);
+    expect(Number(swap.body.data.costPerHead)).toBeCloseTo(othersCost + 15, 2);
+  });
+
+  it('refuses a swap that breaks the agreed budget', async () => {
+    const planId = await createGeneratedPlan();
+    const plan = await request(app)
+      .get(`/api/v1/company/meal-plans/${planId}`)
+      .set(bearer(companyToken));
+    const day = plan.body.data.days[0];
+    const proteinItem = day.items.find((i: { componentType: string }) => i.componentType === 'protein');
+
+    const swap = await request(app)
+      .post(`/api/v1/company/meal-plans/${planId}/days/${day.id}/items/${proteinItem.id}/swap`)
+      .set(bearer(companyToken))
+      .send({ productId: products.hugeProtein });
+
+    expect(swap.status).toBe(400);
+    expect(swap.body.error.message).toContain('over the agreed');
+  });
+
+  it('refuses a swap into the wrong component slot', async () => {
+    const planId = await createGeneratedPlan();
+    const plan = await request(app)
+      .get(`/api/v1/company/meal-plans/${planId}`)
+      .set(bearer(companyToken));
+    const day = plan.body.data.days[0];
+    const proteinItem = day.items.find((i: { componentType: string }) => i.componentType === 'protein');
+
+    const swap = await request(app)
+      .post(`/api/v1/company/meal-plans/${planId}/days/${day.id}/items/${proteinItem.id}/swap`)
+      .set(bearer(companyToken))
+      .send({ productId: products.carb });
+
+    expect(swap.status).toBe(400);
+  });
+
+  it('requires company authentication', async () => {
+    const res = await request(app).get('/api/v1/company/meal-plans');
+    expect(res.status).toBe(401);
+    const asDashboard = await request(app)
+      .get('/api/v1/company/meal-plans')
+      .set(bearer(dashToken));
+    expect(asDashboard.status).toBe(401);
+  });
+});
+
+describe('Confirming a plan places the orders', () => {
+  let dashToken = '';
+  let companyToken = '';
+  let companyId = '';
+  const suffix = `mpo-${Date.now()}`;
+
+  beforeAll(async () => {
+    const dash = await loginDashboardUser();
+    dashToken = dash.body.data.accessToken as string;
+
+    const reg = await registerCompany(suffix);
+    companyId = reg.body.data.companyId as string;
+    await request(app)
+      .post(`/api/v1/dashboard/companies/${companyId}/approve`)
+      .set(bearer(dashToken))
+      .send({ reason: 'test' });
+
+    const login = await request(app)
+      .post('/api/v1/auth/company/login')
+      .send({ email: `user-${suffix}@example.com`, password: 'SecurePass123!' });
+    companyToken = login.body.data.accessToken as string;
+
+    const category = await request(app)
+      .post('/api/v1/dashboard/catalog/categories')
+      .set(bearer(dashToken))
+      .send({ name: `Orders ${suffix}`, slug: `orders-${suffix}` });
+    const categoryId = category.body.data.id as string;
+
+    const productIds: string[] = [];
+    for (const spec of [
+      { name: `Order protein ${suffix}`, price: '20.00', componentType: 'protein', proteinG: 40 },
+      { name: `Order carb ${suffix}`, price: '10.00', componentType: 'carb', proteinG: 6 },
+    ]) {
+      const created = await request(app)
+        .post('/api/v1/dashboard/catalog/products')
+        .set(bearer(dashToken))
+        .send({ categoryId, name: spec.name, basePrice: spec.price, currency: 'EGP', visibility: 'public' });
+      await request(app)
+        .put(`/api/v1/dashboard/catalog/products/${created.body.data.id}/nutrition`)
+        .set(bearer(dashToken))
+        .send({
+          componentType: spec.componentType,
+          caloriesKcal: 400,
+          proteinG: spec.proteinG,
+          carbsG: 40,
+          fatG: 10,
+          allergens: [],
+        });
+      productIds.push(created.body.data.id as string);
+    }
+
+    // Ordering needs a menu assigned to the company.
+    const menu = await request(app)
+      .post('/api/v1/dashboard/menus')
+      .set(bearer(dashToken))
+      .send({ name: `Order menu ${suffix}`, menuType: 'standard', isActive: true });
+    const menuId = menu.body.data.id as string;
+    const section = await request(app)
+      .post(`/api/v1/dashboard/menus/${menuId}/sections`)
+      .set(bearer(dashToken))
+      .send({ name: 'All', sortOrder: 1 });
+    for (const productId of productIds) {
+      await request(app)
+        .post(`/api/v1/dashboard/menus/${menuId}/sections/${section.body.data.id}/products`)
+        .set(bearer(dashToken))
+        .send({ productId, sortOrder: 1 });
+    }
+    await request(app)
+      .post(`/api/v1/dashboard/menus/${menuId}/assignments`)
+      .set(bearer(dashToken))
+      .send({ scopeType: 'company', scopeId: companyId, priority: 50 });
+  });
+
+  it('creates one order per plan day and refuses to bill twice', async () => {
+    const created = await request(app)
+      .post('/api/v1/dashboard/meal-plans')
+      .set(bearer(dashToken))
+      .send({
+        companyId,
+        name: `Order plan ${suffix}`,
+        startDate: '2026-09-07',
+        endDate: '2026-09-09',
+        headcount: 40,
+        budgetPerMeal: '60.00',
+        currency: 'EGP',
+        slots: [
+          { componentType: 'protein', quantity: 1 },
+          { componentType: 'carb', quantity: 1 },
+        ],
+        varietyWindowDays: 0,
+      });
+    const planId = created.body.data.id as string;
+
+    const generated = await request(app)
+      .post(`/api/v1/dashboard/meal-plans/${planId}/generate`)
+      .set(bearer(dashToken))
+      .send({});
+    expect(generated.body.data.days).toHaveLength(3);
+
+    const confirm = await request(app)
+      .post(`/api/v1/company/meal-plans/${planId}/confirm`)
+      .set(bearer(companyToken))
+      .send({ fulfillmentType: 'pickup' });
+
+    expect(confirm.status).toBe(201);
+    expect(confirm.body.data.orderIds).toHaveLength(3);
+    expect(confirm.body.data.plan.status).toBe('approved');
+
+    // Quantities are per head, not per plan.
+    const order = await request(app)
+      .get(`/api/v1/company/orders/${confirm.body.data.orderIds[0]}`)
+      .set(bearer(companyToken));
+    expect(order.status).toBe(200);
+    for (const item of order.body.data.items) {
+      expect(item.quantity % 40).toBe(0);
+    }
+
+    const again = await request(app)
+      .post(`/api/v1/company/meal-plans/${planId}/confirm`)
+      .set(bearer(companyToken))
+      .send({ fulfillmentType: 'pickup' });
+    expect(again.status).toBe(409);
+  });
+
+  it('requires a delivery address for delivery orders', async () => {
+    const created = await request(app)
+      .post('/api/v1/dashboard/meal-plans')
+      .set(bearer(dashToken))
+      .send({
+        companyId,
+        name: `Delivery plan ${suffix}`,
+        startDate: '2026-09-14',
+        endDate: '2026-09-15',
+        headcount: 20,
+        budgetPerMeal: '60.00',
+        currency: 'EGP',
+        slots: [{ componentType: 'protein', quantity: 1 }],
+      });
+    const planId = created.body.data.id as string;
+    await request(app)
+      .post(`/api/v1/dashboard/meal-plans/${planId}/generate`)
+      .set(bearer(dashToken))
+      .send({});
+
+    const confirm = await request(app)
+      .post(`/api/v1/company/meal-plans/${planId}/confirm`)
+      .set(bearer(companyToken))
+      .send({ fulfillmentType: 'delivery' });
+    expect(confirm.status).toBe(400);
+  });
+});
