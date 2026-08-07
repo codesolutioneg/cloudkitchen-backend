@@ -398,6 +398,7 @@ export const upsertNutritionSchema = z.object({
   fiberG: macro.nullable().optional(),
   sodiumMg: macro.nullable().optional(),
   allergens: z.array(z.string().min(1).max(60)).max(30).optional(),
+  dietTags: z.array(z.string().min(1).max(40)).max(10).optional(),
   ingredients: z.string().max(4000).nullable().optional(),
   source: z.string().max(60).nullable().optional(),
 });
@@ -414,6 +415,7 @@ export const productNutritionSchema = z
     fiberG: z.string().nullable(),
     sodiumMg: z.string().nullable(),
     allergens: z.array(z.string()),
+    dietTags: z.array(z.string()),
     ingredients: z.string().nullable(),
     source: z.string().nullable(),
     updatedAt: z.string(),

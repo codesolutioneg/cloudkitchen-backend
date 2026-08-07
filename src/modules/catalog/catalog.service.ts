@@ -1290,6 +1290,7 @@ function serializeNutrition(nutrition: {
   fiber_g: Prisma.Decimal | null;
   sodium_mg: Prisma.Decimal | null;
   allergens: string[];
+  diet_tags: string[];
   ingredients: string | null;
   source: string | null;
   updated_at: Date;
@@ -1305,6 +1306,7 @@ function serializeNutrition(nutrition: {
     fiberG: nutrition.fiber_g?.toString() ?? null,
     sodiumMg: nutrition.sodium_mg?.toString() ?? null,
     allergens: nutrition.allergens,
+    dietTags: nutrition.diet_tags,
     ingredients: nutrition.ingredients,
     source: nutrition.source,
     updatedAt: nutrition.updated_at.toISOString(),
@@ -1342,6 +1344,7 @@ export async function upsertProductNutrition(
     fiberG?: number | null;
     sodiumMg?: number | null;
     allergens?: string[];
+    dietTags?: string[];
     ingredients?: string | null;
     source?: string | null;
   },
@@ -1361,6 +1364,7 @@ export async function upsertProductNutrition(
       input.sodiumMg === undefined || input.sodiumMg === null ? null : new Prisma.Decimal(input.sodiumMg),
     // Allergens are matched case-insensitively by the planner; store them folded.
     allergens: (input.allergens ?? []).map((allergen) => allergen.trim().toLowerCase()),
+    diet_tags: (input.dietTags ?? []).map((tag) => tag.trim().toLowerCase()),
     ingredients: input.ingredients ?? null,
     source: input.source ?? 'manual',
     updated_by_type: actor?.type ?? null,

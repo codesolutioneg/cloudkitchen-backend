@@ -13,6 +13,7 @@ import { businessRuleResolver } from '../../engines/businessRuleResolver';
 import { configResolver } from '../../engines/configResolver';
 import { getDashboardCompanyScopeFilter } from '../../engines/companyScopeResolver';
 import { menuResolver } from '../../engines/menuResolver';
+import { recipeCostEngine } from '../../engines/recipeCostEngine';
 import { timelineService } from '../../engines/timelineService';
 import { computeSlaDueAt, workflowEngine } from '../../engines/workflowEngine';
 import { workflowActionDispatcher } from '../../engines/workflowActionDispatcher';
@@ -569,6 +570,14 @@ export async function createOrder(input: CreateOrderInput) {
   const orderNumber = generateOrderNumber();
   const fulfillmentQrToken = generateFulfillmentQrToken();
 
+  // What the food cost when the order was placed. Looked up once, outside the
+  // transaction, so a later ingredient price change cannot rewrite this order's
+  // margin. A missing or untrustworthy cost is stored as null, never as zero:
+  // zero would read as pure profit in every margin report.
+  const costSnapshots = await recipeCostEngine.snapshotCostsForProducts(
+    lineItems.map((item) => ({ productId: item.productId, variantId: item.variantId ?? null })),
+  );
+
   const result = await prisma.$transaction(async (tx) => {
     const order = await tx.order.create({
       data: {
@@ -606,6 +615,14 @@ export async function createOrder(input: CreateOrderInput) {
           quantity: item.quantity,
           line_total: item.lineTotal,
           notes: item.notes,
+          ...(() => {
+            const cost = costSnapshots.get(
+              `${item.productId}:${item.variantId ?? recipeCostEngine.NO_VARIANT_KEY}`,
+            );
+            return cost?.isCosted
+              ? { unit_cost_snapshot: cost.totalCost, cost_snapshot_source: cost.computedFrom }
+              : { unit_cost_snapshot: null, cost_snapshot_source: 'none' };
+          })(),
         },
       });
 

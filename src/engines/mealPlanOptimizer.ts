@@ -40,6 +40,8 @@ export interface CandidateProduct {
   carbsG: number;
   fatG: number;
   allergens: string[];
+  /** vegetarian, halal, gluten_free and so on. */
+  dietTags: string[];
 }
 
 export interface SlotSpec {
@@ -76,6 +78,8 @@ export interface PlanRequest {
   slots: SlotSpec[];
   targets: NutritionTargets;
   excludeAllergens?: string[];
+  /** Every picked product must carry all of these. */
+  requireDietTags?: string[];
   /** A product picked today cannot come back for this many following days. */
   varietyWindowDays?: number;
   lockedPicks?: LockedPick[];
@@ -100,6 +104,7 @@ export interface PlannedItem {
 export interface PlanWarning {
   code:
     | 'no_candidates_for_component'
+    | 'diet_requirement_unmet'
     | 'budget_exceeded'
     | 'protein_below_target'
     | 'protein_above_target'
@@ -243,6 +248,13 @@ function candidateKey(candidate: { productId: string; variantId?: string | null 
 function hasExcludedAllergen(candidate: CandidateProduct, excluded: Set<string>): boolean {
   if (excluded.size === 0) return false;
   return candidate.allergens.some((allergen) => excluded.has(allergen.trim().toLowerCase()));
+}
+
+/** A halal or vegetarian brief is a hard filter, not a preference to trade off. */
+function meetsDietRequirement(candidate: CandidateProduct, required: string[]): boolean {
+  if (required.length === 0) return true;
+  const tags = new Set((candidate.dietTags ?? []).map((tag) => tag.trim().toLowerCase()));
+  return required.every((tag) => tags.has(tag));
 }
 
 export interface DayTotals {
@@ -409,8 +421,12 @@ export function buildMealPlan(request: PlanRequest): PlanResult {
     (request.excludeAllergens ?? []).map((allergen) => allergen.trim().toLowerCase()),
   );
 
+  const requiredDiet = (request.requireDietTags ?? []).map((tag) => tag.trim().toLowerCase());
   const usable = sortCandidates(
-    request.candidates.filter((candidate) => !hasExcludedAllergen(candidate, excluded)),
+    request.candidates.filter(
+      (candidate) =>
+        !hasExcludedAllergen(candidate, excluded) && meetsDietRequirement(candidate, requiredDiet),
+    ),
   );
 
   const byComponent = new Map<ComponentType, CandidateProduct[]>();
@@ -423,11 +439,23 @@ export function buildMealPlan(request: PlanRequest): PlanResult {
   const planWarnings: PlanWarning[] = [];
   for (const slot of request.slots) {
     if ((byComponent.get(slot.componentType) ?? []).length === 0) {
-      planWarnings.push({
-        code: 'no_candidates_for_component',
-        componentType: slot.componentType,
-        message: `No priced product with nutrition data is available for the "${slot.componentType}" component.`,
-      });
+      // Say which constraint emptied the pool, so the fix is obvious.
+      const beforeDiet = request.candidates.filter(
+        (c) => c.componentType === slot.componentType && !hasExcludedAllergen(c, excluded),
+      ).length;
+      planWarnings.push(
+        requiredDiet.length > 0 && beforeDiet > 0
+          ? {
+              code: 'diet_requirement_unmet',
+              componentType: slot.componentType,
+              message: `No "${slot.componentType}" product carries every required tag (${requiredDiet.join(', ')}).`,
+            }
+          : {
+              code: 'no_candidates_for_component',
+              componentType: slot.componentType,
+              message: `No priced product with nutrition data is available for the "${slot.componentType}" component.`,
+            },
+      );
     }
   }
 

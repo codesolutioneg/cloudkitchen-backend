@@ -18,6 +18,11 @@ import apiRouter from './routes/index';
 
 const app = express();
 
+// nginx terminates TLS in front of this process, so the client IP arrives in
+// X-Forwarded-For. Without this the rate limiter cannot tell callers apart and
+// logs ERR_ERL_UNEXPECTED_X_FORWARDED_FOR on every request.
+app.set('trust proxy', 1);
+
 app.use(
   helmet({
     crossOriginResourcePolicy: { policy: 'cross-origin' },

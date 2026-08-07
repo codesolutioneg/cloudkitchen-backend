@@ -126,3 +126,7 @@ export async function archiveCompanyPlan(req: Request, res: Response): Promise<v
 export async function listCompanyComponents(_req: Request, res: Response): Promise<void> {
   sendSuccess(res, await service.listCompanyComponents());
 }
+
+export async function getPlanMargin(req: Request, res: Response): Promise<void> {
+  sendSuccess(res, await service.getPlanMargin(req.params.id!));
+}

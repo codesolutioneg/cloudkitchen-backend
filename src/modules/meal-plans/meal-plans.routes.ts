@@ -94,6 +94,13 @@ router.post(
   validate(generatePlanSchema),
   asyncHandler(controller.generatePlan),
 );
+router.get(
+  '/dashboard/meal-plans/:id/margin',
+  auth,
+  canView,
+  validate(planIdParamsSchema, 'params'),
+  asyncHandler(controller.getPlanMargin),
+);
 router.post(
   '/dashboard/meal-plans/:id/approve',
   auth,

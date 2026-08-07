@@ -10,6 +10,7 @@ import {
 import { getRequestActor } from '../../core/middleware/requestContext';
 import { getDashboardCompanyScopeFilter } from '../../engines/companyScopeResolver';
 import { menuResolver } from '../../engines/menuResolver';
+import { recipeCostEngine } from '../../engines/recipeCostEngine';
 import * as ordersService from '../orders/orders.service';
 import {
   buildMealPlan,
@@ -44,6 +45,7 @@ export interface PlanBriefInput {
   sourceMenuId?: string | null;
   slots: SlotSpec[];
   excludeAllergens?: string[];
+  requireDietTags?: string[];
   varietyWindowDays?: number;
   minCaloriesKcal?: number | null;
   maxCaloriesKcal?: number | null;
@@ -106,6 +108,7 @@ function serializePlan(plan: PlanRow) {
     maxFatG: dec(plan.max_fat_g),
     slots: parseSlots(plan.slot_spec),
     excludeAllergens: plan.exclude_allergens,
+    requireDietTags: plan.require_diet_tags,
     varietyWindowDays: plan.variety_window_days,
     generatedAt: plan.generated_at?.toISOString() ?? null,
     isFeasible: plan.is_feasible,
@@ -239,6 +242,7 @@ export async function resolveCandidates(
         carbsG: Number(nutrition.carbs_g),
         fatG: Number(nutrition.fat_g),
         allergens: nutrition.allergens,
+        dietTags: nutrition.diet_tags,
         categoryId: product.category_id,
         currency: product.currency,
       },
@@ -461,6 +465,7 @@ async function createPlanRecord(input: PlanBriefInput & { name: string; descript
       source_menu_id: input.sourceMenuId ?? null,
       slot_spec: input.slots as unknown as Prisma.InputJsonValue,
       exclude_allergens: input.excludeAllergens ?? [],
+      require_diet_tags: input.requireDietTags ?? [],
       variety_window_days: input.varietyWindowDays ?? 2,
       ...targetColumns(input),
       created_by_type: actor.type,
@@ -506,6 +511,9 @@ export async function updatePlan(planId: string, input: Partial<PlanBriefInput> 
         : {}),
       ...(input.excludeAllergens !== undefined
         ? { exclude_allergens: input.excludeAllergens }
+        : {}),
+      ...(input.requireDietTags !== undefined
+        ? { require_diet_tags: input.requireDietTags }
         : {}),
       ...(input.varietyWindowDays !== undefined
         ? { variety_window_days: input.varietyWindowDays }
@@ -607,6 +615,7 @@ async function solveBrief(
     sourceMenuId?: string | null;
     slots: SlotSpec[];
     excludeAllergens: string[];
+    requireDietTags: string[];
     varietyWindowDays: number;
     targets: NutritionTargets;
   },
@@ -630,6 +639,7 @@ async function solveBrief(
     slots: brief.slots,
     targets: brief.targets,
     excludeAllergens: brief.excludeAllergens,
+    requireDietTags: brief.requireDietTags,
     varietyWindowDays: brief.varietyWindowDays,
     lockedPicks,
     candidates,
@@ -652,6 +662,7 @@ export async function previewPlan(input: PlanBriefInput) {
     sourceMenuId: input.sourceMenuId,
     slots: input.slots,
     excludeAllergens: input.excludeAllergens ?? [],
+    requireDietTags: input.requireDietTags ?? [],
     varietyWindowDays: input.varietyWindowDays ?? 2,
     targets: {
       minCaloriesKcal: input.minCaloriesKcal ?? null,
@@ -718,6 +729,7 @@ async function generatePlanRecord(planId: string, keepLockedItems = true) {
       sourceMenuId: plan.source_menu_id,
       slots,
       excludeAllergens: plan.exclude_allergens,
+      requireDietTags: plan.require_diet_tags,
       varietyWindowDays: plan.variety_window_days,
       targets: targetsOf(plan),
     },
@@ -1431,6 +1443,7 @@ export async function previewCompanyPlan(
     sourceMenuId: null,
     slots: input.slots,
     excludeAllergens: input.excludeAllergens ?? [],
+    requireDietTags: input.requireDietTags ?? [],
     varietyWindowDays: input.varietyWindowDays ?? 2,
     targets: {
       minCaloriesKcal: input.minCaloriesKcal ?? null,
@@ -1469,4 +1482,69 @@ export async function listCompanyComponents() {
       cheapestPrice: v.cheapest.toFixed(2),
     }))
     .sort((a, b) => a.componentType.localeCompare(b.componentType));
+}
+
+/**
+ * What a plan costs the business against what the client pays for it (§4).
+ *
+ * Dashboard only: the client sees their price, not our margin. Lines whose
+ * product has no trustworthy food cost are counted separately rather than
+ * treated as free, because a zero there would read as pure profit.
+ */
+export async function getPlanMargin(planId: string) {
+  const plan = await loadPlanOrThrow(planId);
+
+  const days = await prisma.mealPlanDay.findMany({
+    where: { meal_plan_id: planId },
+    include: { items: true },
+  });
+
+  const keys = days.flatMap((day) =>
+    day.items.map((item) => ({ productId: item.product_id, variantId: item.variant_id })),
+  );
+  const costs = await recipeCostEngine.snapshotCostsForProducts(keys);
+
+  let revenue = new Decimal(0);
+  let cost = new Decimal(0);
+  let costedLines = 0;
+  let uncostedLines = 0;
+
+  for (const day of days) {
+    for (const item of day.items) {
+      revenue = revenue.plus(item.line_total);
+      const snapshot = costs.get(
+        `${item.product_id}:${item.variant_id ?? recipeCostEngine.NO_VARIANT_KEY}`,
+      );
+      if (snapshot?.isCosted) {
+        cost = cost.plus(snapshot.totalCost.times(item.quantity));
+        costedLines += 1;
+      } else {
+        uncostedLines += 1;
+      }
+    }
+  }
+
+  const totalLines = costedLines + uncostedLines;
+  const headcount = plan.headcount;
+  const marginPerHead = revenue.minus(cost);
+
+  return {
+    planId,
+    currency: plan.currency,
+    headcount,
+    // Per head, per day, summed across the plan.
+    revenuePerHead: revenue.toFixed(2),
+    foodCostPerHead: cost.toFixed(2),
+    marginPerHead: marginPerHead.toFixed(2),
+    marginPercent: revenue.greaterThan(0)
+      ? marginPerHead.dividedBy(revenue).times(100).toFixed(2)
+      : null,
+    planRevenue: revenue.times(headcount).toFixed(2),
+    planFoodCost: cost.times(headcount).toFixed(2),
+    planMargin: marginPerHead.times(headcount).toFixed(2),
+    costedLines,
+    uncostedLines,
+    // How much of the plan the margin above actually covers.
+    costCoveragePercent: totalLines === 0 ? '0.00' : ((costedLines / totalLines) * 100).toFixed(2),
+  };
 }

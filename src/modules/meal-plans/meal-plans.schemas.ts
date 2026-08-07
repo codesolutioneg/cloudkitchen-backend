@@ -61,6 +61,7 @@ export const createPlanSchema = z
     sourceMenuId: z.string().uuid().nullable().optional(),
     slots: z.array(slotSpecSchema).min(1).max(10),
     excludeAllergens: z.array(z.string().min(1).max(60)).max(30).optional(),
+  requireDietTags: z.array(z.string().min(1).max(40)).max(10).optional(),
     varietyWindowDays: z.number().int().min(0).max(30).optional(),
     ...targetFields,
   })
@@ -81,6 +82,7 @@ export const updatePlanSchema = z.object({
   sourceMenuId: z.string().uuid().nullable().optional(),
   slots: z.array(slotSpecSchema).min(1).max(10).optional(),
   excludeAllergens: z.array(z.string().min(1).max(60)).max(30).optional(),
+  requireDietTags: z.array(z.string().min(1).max(40)).max(10).optional(),
   varietyWindowDays: z.number().int().min(0).max(30).optional(),
   ...targetFields,
 });
@@ -101,6 +103,7 @@ export const previewPlanSchema = z
     sourceMenuId: z.string().uuid().nullable().optional(),
     slots: z.array(slotSpecSchema).min(1).max(10),
     excludeAllergens: z.array(z.string().min(1).max(60)).max(30).optional(),
+  requireDietTags: z.array(z.string().min(1).max(40)).max(10).optional(),
     varietyWindowDays: z.number().int().min(0).max(30).optional(),
     ...targetFields,
   })
@@ -200,6 +203,7 @@ export const mealPlanSchema = z
     maxFatG: z.string().nullable(),
     slots: z.array(slotSpecSchema),
     excludeAllergens: z.array(z.string()),
+    requireDietTags: z.array(z.string()),
     varietyWindowDays: z.number().int(),
     generatedAt: z.string().nullable(),
     isFeasible: z.boolean(),
@@ -606,6 +610,7 @@ export const companyBriefSchema = z
     currency: z.string().length(3).optional(),
     slots: z.array(slotSpecSchema).min(1).max(10),
     excludeAllergens: z.array(z.string().min(1).max(60)).max(30).optional(),
+  requireDietTags: z.array(z.string().min(1).max(40)).max(10).optional(),
     varietyWindowDays: z.number().int().min(0).max(30).optional(),
     ...targetFields,
   })
@@ -676,4 +681,14 @@ registry.registerPath({
   security: companyBearer,
   request: { params: planIdParamsSchema },
   responses: { 204: { description: 'Plan removed' } },
+});
+
+registry.registerPath({
+  method: 'get',
+  path: '/api/v1/dashboard/meal-plans/{id}/margin',
+  tags: ['Meal Plans'],
+  summary: 'Margin the business makes on a plan',
+  security: bearer,
+  request: { params: planIdParamsSchema },
+  responses: { 200: { description: 'Plan revenue, food cost, margin and cost coverage' } },
 });
