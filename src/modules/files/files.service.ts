@@ -137,6 +137,17 @@ async function assertEntityAccess(
       return;
     }
 
+    if (entityType === 'invoice') {
+      const invoice = await prisma.invoice.findFirst({
+        where: { id: entityId, company_id: actor.companyId, is_deleted: false },
+        select: { id: true },
+      });
+      if (!invoice) {
+        throw new ForbiddenError('Cannot access this invoice');
+      }
+      return;
+    }
+
     throw new ForbiddenError('Unsupported entity type for company user');
   }
 
