@@ -141,6 +141,9 @@ model Company {
   invoices                 Invoice[]
   custom_products          Product[]                        @relation("CompanyCustomProducts")
   meal_plans               MealPlan[]
+  order_templates          OrderTemplate[]
+  order_schedules          OrderSchedule[]
+  order_schedule_cycles    OrderScheduleCycle[]
 
   @@index([status])
   @@index([approval_status])
@@ -176,6 +179,9 @@ model CompanyAddress {
 
   company         Company @relation(fields: [company_id], references: [id], onDelete: Cascade)
   orders_delivery Order[] @relation("OrderDeliveryAddress")
+
+  order_templates OrderTemplate[] @relation("OrderTemplateAddress")
+  order_schedules OrderSchedule[] @relation("OrderScheduleAddress")
 
   @@index([company_id])
   @@map("company_addresses")
@@ -239,6 +245,8 @@ model CompanyUser {
   password_resets    CompanyUserPasswordResetToken[]
   otp_codes          CompanyUserOtpCode[]
   company_user_roles CompanyUserRole[]
+
+  order_schedules OrderSchedule[] @relation("OrderScheduleOrderedBy")
 
   @@index([company_id])
   @@map("company_users")
@@ -315,6 +323,9 @@ model Department {
   child_departments Department[]  @relation("DepartmentParent")
   company_users     CompanyUser[]
   orders            Order[]
+
+  order_templates OrderTemplate[]
+  order_schedules OrderSchedule[]
 
   @@index([company_id])
   @@map("departments")
@@ -767,6 +778,10 @@ model Product {
   order_items           OrderItem[]
   nutrition             ProductNutrition?
   meal_plan_items       MealPlanItem[]
+  recipes               Recipe[]
+  product_costs         ProductCost[]
+  order_template_items  OrderTemplateItem[]
+  production_plan_lines ProductionPlanLine[]
 
   @@index([category_id])
   @@index([company_id, approval_status])
@@ -815,6 +830,11 @@ model ProductVariant {
   prices          ProductPrice[]
   meal_plan_items MealPlanItem[]
 
+  recipes               Recipe[]
+  product_costs         ProductCost[]
+  order_template_items  OrderTemplateItem[]
+  production_plan_lines ProductionPlanLine[]
+
   @@index([product_id])
   @@map("product_variants")
 }
@@ -845,6 +865,8 @@ model ProductOption {
 
   option_group       ProductOptionGroup @relation(fields: [option_group_id], references: [id], onDelete: Cascade)
   order_item_options OrderItemOption[]
+
+  order_template_item_options OrderTemplateItemOption[]
 
   @@index([option_group_id])
   @@map("product_options")
@@ -1266,6 +1288,8 @@ model Order {
   cancellation     OrderCancellation?
   payment          OrderPayment?
 
+  cycle_days OrderScheduleCycleDay[] @relation("CycleDayOrder")
+
   @@index([company_id, created_at(sort: Desc)])
   @@index([series_id])
   @@map("orders")
@@ -1405,6 +1429,8 @@ model OrderSeries {
   company    Company     @relation(fields: [company_id], references: [id], onDelete: Restrict)
   ordered_by CompanyUser @relation(fields: [ordered_by_user_id], references: [id], onDelete: Restrict)
   orders     Order[]
+
+  cycle OrderScheduleCycle?
 
   @@index([company_id, created_at(sort: Desc)])
   @@map("order_series")
@@ -2166,6 +2192,9 @@ model MealPlan {
   orders       Order[]
   invoices     Invoice[]
 
+  order_templates OrderTemplate[]      @relation("OrderTemplateSourcePlan")
+  schedule_cycles OrderScheduleCycle[] @relation("MealPlanScheduleCycle")
+
   @@index([company_id, status])
   @@index([start_date])
   @@map("meal_plans")
@@ -2337,4 +2366,737 @@ model PaymentInstalment {
   @@unique([invoice_id, sequence])
   @@index([status, due_at])
   @@map("payment_instalments")
+}
+
+// ============================================================================
+// §33: MODULE: Ingredients, Recipes & Food Costing
+//
+// Raw materials with a standing purchase price, recipes that turn them into a
+// menu item, and a materialized per-product food cost. Selling price (§3) is a
+// separate, independent number: nothing here ever writes products.base_price
+// or product_prices. Margin is derived at read time by pairing product_costs
+// with the resolved selling price, never stored.
+//
+// Rate columns (cost per gram, cost per portion) carry more scale than the
+// (12,2) money convention on purpose: a gram of flour costs 0.00982 EGP and
+// rounding that to 2dp destroys the roll-up. Money shown to a human is still
+// rounded to 2dp at the serializer.
+// ============================================================================
+
+model Supplier {
+  id           String  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  code         String? @unique @db.VarChar(60)
+  name         String  @db.VarChar(180)
+  name_ar      String? @db.VarChar(180)
+  contact_name String? @db.VarChar(150)
+  phone        String? @db.VarChar(40)
+  email        String? @db.VarChar(180)
+  notes        String?
+  is_active    Boolean @default(true)
+
+  created_at      DateTime  @default(now()) @db.Timestamptz(6)
+  updated_at      DateTime  @updatedAt @db.Timestamptz(6)
+  deleted_at      DateTime? @db.Timestamptz(6)
+  created_by_type String?   @db.VarChar(20)
+  created_by_id   String?   @db.Uuid
+  updated_by_type String?   @db.VarChar(20)
+  updated_by_id   String?   @db.Uuid
+  is_deleted      Boolean   @default(false)
+  version         Int       @default(1)
+
+  ingredients Ingredient[]
+
+  @@index([is_active, is_deleted])
+  @@map("suppliers")
+}
+
+model IngredientCategory {
+  id         String  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name       String  @db.VarChar(150)
+  name_ar    String? @db.VarChar(150)
+  slug       String  @unique @db.VarChar(150)
+  sort_order Int     @default(0)
+  is_active  Boolean @default(true)
+
+  created_at      DateTime  @default(now()) @db.Timestamptz(6)
+  updated_at      DateTime  @updatedAt @db.Timestamptz(6)
+  deleted_at      DateTime? @db.Timestamptz(6)
+  created_by_type String?   @db.VarChar(20)
+  created_by_id   String?   @db.Uuid
+  updated_by_type String?   @db.VarChar(20)
+  updated_by_id   String?   @db.Uuid
+  is_deleted      Boolean   @default(false)
+  version         Int       @default(1)
+
+  ingredients Ingredient[]
+
+  @@map("ingredient_categories")
+}
+
+model Ingredient {
+  id                     String  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  ingredient_category_id String? @db.Uuid
+  supplier_id            String? @db.Uuid
+  sku                    String? @unique @db.VarChar(100)
+  name                   String  @db.VarChar(180)
+  name_ar                String? @db.VarChar(180)
+
+  // Which quantity space this ingredient lives in. Fixes the base unit used by
+  // the whole cost chain: mass -> g, volume -> ml, count -> pc.
+  dimension String @db.VarChar(10) // mass | volume | count
+  base_uom  String @db.VarChar(10) // g | ml | pc (derived from dimension, stored for query clarity)
+
+  // Standing purchase price: "we pay purchase_price for purchase_qty purchase_uom".
+  purchase_price Decimal @db.Decimal(12, 4)
+  purchase_qty   Decimal @db.Decimal(14, 4)
+  purchase_uom   String  @db.VarChar(20)
+  currency       String  @db.Char(3)
+
+  // Usable fraction after trim/peel/bone-out. 100.000 = no loss.
+  yield_percent Decimal @default(100.000) @db.Decimal(6, 3)
+
+  // DERIVED, written only by ingredients.service#computeCostPerBaseUnit:
+  //   purchase_price / (purchase_qty -> base_uom) / (yield_percent / 100)
+  cost_per_base_unit Decimal  @db.Decimal(18, 8)
+  cost_updated_at    DateTime @default(now()) @db.Timestamptz(6)
+  is_active          Boolean  @default(true)
+  notes              String?
+
+  created_at      DateTime  @default(now()) @db.Timestamptz(6)
+  updated_at      DateTime  @updatedAt @db.Timestamptz(6)
+  deleted_at      DateTime? @db.Timestamptz(6)
+  created_by_type String?   @db.VarChar(20)
+  created_by_id   String?   @db.Uuid
+  updated_by_type String?   @db.VarChar(20)
+  updated_by_id   String?   @db.Uuid
+  is_deleted      Boolean   @default(false)
+  version         Int       @default(1)
+
+  category      IngredientCategory?       @relation(fields: [ingredient_category_id], references: [id], onDelete: SetNull)
+  supplier      Supplier?                 @relation(fields: [supplier_id], references: [id], onDelete: SetNull)
+  conversions   IngredientUomConversion[]
+  price_history IngredientPriceHistory[]
+  recipe_lines  RecipeLine[]
+
+  @@index([ingredient_category_id])
+  @@index([supplier_id])
+  @@index([is_active, is_deleted])
+  @@map("ingredients")
+}
+
+/// Ingredient-specific factors the static unit table cannot know: density
+/// (ml -> g), piece weight (pc -> g), pack size (bunch -> g). Consulted only
+/// when a recipe line's unit is in a different dimension from `base_uom`.
+model IngredientUomConversion {
+  id            String  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  ingredient_id String  @db.Uuid
+  from_uom      String  @db.VarChar(20)
+  to_uom        String  @db.VarChar(20)
+  factor        Decimal @db.Decimal(18, 8) // 1 from_uom = factor to_uom
+  note          String? @db.VarChar(200)
+
+  created_at      DateTime @default(now()) @db.Timestamptz(6)
+  updated_at      DateTime @updatedAt @db.Timestamptz(6)
+  updated_by_type String?  @db.VarChar(20)
+  updated_by_id   String?  @db.Uuid
+
+  ingredient Ingredient @relation(fields: [ingredient_id], references: [id], onDelete: Cascade)
+
+  @@unique([ingredient_id, from_uom, to_uom])
+  @@index([ingredient_id])
+  @@map("ingredient_uom_conversions")
+}
+
+/// Append-only. Why a cost moved, not what a past margin was: past margins are
+/// answered from order_items.unit_cost_snapshot (§8), never reconstructed here.
+model IngredientPriceHistory {
+  id            String  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  ingredient_id String  @db.Uuid
+  batch_id      String? @db.Uuid
+
+  old_purchase_price     Decimal? @db.Decimal(12, 4)
+  new_purchase_price     Decimal  @db.Decimal(12, 4)
+  old_purchase_qty       Decimal? @db.Decimal(14, 4)
+  new_purchase_qty       Decimal  @db.Decimal(14, 4)
+  purchase_uom           String   @db.VarChar(20)
+  old_yield_percent      Decimal? @db.Decimal(6, 3)
+  new_yield_percent      Decimal  @db.Decimal(6, 3)
+  old_cost_per_base_unit Decimal? @db.Decimal(18, 8)
+  new_cost_per_base_unit Decimal  @db.Decimal(18, 8)
+  currency               String   @db.Char(3)
+  change_percent         Decimal? @db.Decimal(10, 4)
+
+  change_reason   String   @db.VarChar(30) // initial | manual | bulk_update | supplier_import | correction
+  note            String?
+  // Present so a future scheduler can post-date a rise with no migration.
+  effective_from  DateTime @default(now()) @db.Timestamptz(6)
+  changed_by_type String?  @db.VarChar(20)
+  changed_by_id   String?  @db.Uuid
+  changed_at      DateTime @default(now()) @db.Timestamptz(6)
+
+  ingredient Ingredient                  @relation(fields: [ingredient_id], references: [id], onDelete: Cascade)
+  batch      IngredientPriceUpdateBatch? @relation(fields: [batch_id], references: [id], onDelete: SetNull)
+
+  @@index([ingredient_id, changed_at(sort: Desc)])
+  @@index([batch_id])
+  @@index([changed_at(sort: Desc)])
+  @@map("ingredient_price_history")
+}
+
+/// One row per bulk price run, so the audit log reads as events a human
+/// recognises ("14 Aug, supplier increase, 46 items, 88 dishes repriced").
+model IngredientPriceUpdateBatch {
+  id                     String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  source                 String    @db.VarChar(30) // manual_bulk | csv | supplier_import
+  status                 String    @default("applied") @db.VarChar(20) // applied | recalculating | failed
+  file_id                String?   @db.Uuid // -> files.id, no relation (§30 polymorphic-lite); set when source = csv
+  note                   String?
+  ingredient_count       Int       @default(0)
+  affected_recipe_count  Int       @default(0)
+  affected_product_count Int       @default(0)
+  background_job_id      String?   @db.Uuid
+  last_error             String?
+  applied_at             DateTime? @db.Timestamptz(6)
+
+  created_at      DateTime @default(now()) @db.Timestamptz(6)
+  updated_at      DateTime @updatedAt @db.Timestamptz(6)
+  created_by_type String?  @db.VarChar(20)
+  created_by_id   String?  @db.Uuid
+
+  price_history IngredientPriceHistory[]
+  cost_history  ProductCostHistory[]
+
+  @@index([status, created_at(sort: Desc)])
+  @@index([created_at(sort: Desc)])
+  @@map("ingredient_price_update_batches")
+}
+
+/// A menu_item recipe belongs to a product (optionally a specific variant).
+/// A prep recipe belongs to nothing and is consumed by other recipes via
+/// recipe_lines.sub_recipe_id (sauces, marinades, doughs).
+model Recipe {
+  id          String  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  recipe_type String  @default("menu_item") @db.VarChar(20) // menu_item | prep
+  product_id  String? @db.Uuid
+  variant_id  String? @db.Uuid
+  name        String  @db.VarChar(180)
+  name_ar     String? @db.VarChar(180)
+  status      String  @default("draft") @db.VarChar(20) // draft | active | archived
+  method      String?
+
+  // What one execution of this recipe produces. menu_item: portions.
+  // prep: a mass/volume/count that a parent line can draw from.
+  yield_qty        Decimal @default(1) @db.Decimal(14, 4)
+  yield_uom        String  @default("portion") @db.VarChar(20)
+  output_dimension String  @default("portion") @db.VarChar(10) // portion | mass | volume | count
+  output_base_uom  String  @default("portion") @db.VarChar(10) // portion | g | ml | pc
+  // DERIVED on write: yield_qty converted to output_base_uom. Divisor in the
+  // roll-up SQL, so the CTE never has to convert units.
+  yield_base_qty   Decimal @db.Decimal(18, 6)
+
+  created_at      DateTime  @default(now()) @db.Timestamptz(6)
+  updated_at      DateTime  @updatedAt @db.Timestamptz(6)
+  deleted_at      DateTime? @db.Timestamptz(6)
+  created_by_type String?   @db.VarChar(20)
+  created_by_id   String?   @db.Uuid
+  updated_by_type String?   @db.VarChar(20)
+  updated_by_id   String?   @db.Uuid
+  is_deleted      Boolean   @default(false)
+  version         Int       @default(1)
+
+  product       Product?        @relation(fields: [product_id], references: [id], onDelete: Restrict)
+  variant       ProductVariant? @relation(fields: [variant_id], references: [id], onDelete: Restrict)
+  lines         RecipeLine[]
+  used_as_sub   RecipeLine[]    @relation("RecipeSubRecipe")
+  product_costs ProductCost[]
+
+  @@index([product_id, variant_id])
+  @@index([recipe_type, status])
+  @@map("recipes")
+}
+
+model RecipeLine {
+  id            String  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  recipe_id     String  @db.Uuid
+  // Exactly one of the two is set (CHECK constraint in the migration).
+  ingredient_id String? @db.Uuid
+  sub_recipe_id String? @db.Uuid
+
+  quantity      Decimal @db.Decimal(14, 4)
+  uom           String  @db.VarChar(20)
+  // DERIVED on write: `quantity` expressed in the child's base unit
+  // (ingredient.base_uom or sub-recipe.output_base_uom). Conversion happens
+  // once here, so recalculation is multiply-and-sum with no unit lookups.
+  quantity_base Decimal @db.Decimal(18, 6)
+
+  // Excluded from the cost roll-up. Filtered in both terms of the CTE.
+  is_optional Boolean @default(false)
+  sort_order  Int     @default(0)
+  note        String? @db.VarChar(200)
+
+  created_at      DateTime @default(now()) @db.Timestamptz(6)
+  updated_at      DateTime @updatedAt @db.Timestamptz(6)
+  updated_by_type String?  @db.VarChar(20)
+  updated_by_id   String?  @db.Uuid
+
+  recipe     Recipe      @relation(fields: [recipe_id], references: [id], onDelete: Cascade)
+  ingredient Ingredient? @relation(fields: [ingredient_id], references: [id], onDelete: Restrict)
+  sub_recipe Recipe?     @relation("RecipeSubRecipe", fields: [sub_recipe_id], references: [id], onDelete: Restrict)
+
+  @@index([recipe_id])
+  @@index([ingredient_id]) // reverse lookup: which recipes does this ingredient touch
+  @@index([sub_recipe_id])
+  @@map("recipe_lines")
+}
+
+/// Materialized roll-up: one row per sellable (product, variant). Rebuilt in
+/// bulk by recipeCostEngine, never computed per request.
+model ProductCost {
+  id          String  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  product_id  String  @db.Uuid
+  variant_id  String? @db.Uuid
+  // COALESCE(variant_id, NO_VARIANT_KEY). Postgres treats NULLs as distinct in
+  // a unique index, so a nullable variant_id gives neither a real uniqueness
+  // guarantee nor a usable ON CONFLICT target. Kept in sync by a CHECK.
+  variant_key String  @db.Uuid
+  recipe_id   String? @db.Uuid
+
+  food_cost      Decimal @default(0) @db.Decimal(12, 4) // per portion, from the recipe
+  packaging_cost Decimal @default(0) @db.Decimal(12, 4) // per portion, entered by hand
+  total_cost     Decimal @default(0) @db.Decimal(12, 4) // food + packaging
+  currency       String  @db.Char(3)
+
+  // false = the cost is not trustworthy for margin. Consumers must render
+  // margin as unknown. A COALESCE(cost, 0) downstream is a bug, not a
+  // convenience. Never inferred from food_cost = 0 (a free garnish is legit).
+  is_costed                Boolean  @default(false)
+  // ok | no_recipe | missing_ingredient | depth_exceeded | currency_conflict | manual_override
+  cost_status              String   @default("no_recipe") @db.VarChar(30)
+  missing_ingredient_count Int      @default(0)
+  computed_from            String   @default("recipe") @db.VarChar(20) // recipe | manual_override
+  manual_food_cost         Decimal? @db.Decimal(12, 4)
+  computed_at              DateTime @default(now()) @db.Timestamptz(6)
+
+  created_at      DateTime @default(now()) @db.Timestamptz(6)
+  updated_at      DateTime @updatedAt @db.Timestamptz(6)
+  updated_by_type String?  @db.VarChar(20)
+  updated_by_id   String?  @db.Uuid
+
+  product Product         @relation(fields: [product_id], references: [id], onDelete: Cascade)
+  variant ProductVariant? @relation(fields: [variant_id], references: [id], onDelete: Cascade)
+  recipe  Recipe?         @relation(fields: [recipe_id], references: [id], onDelete: SetNull)
+
+  @@unique([product_id, variant_key])
+  @@index([is_costed])
+  @@index([recipe_id])
+  @@map("product_costs")
+}
+
+/// Append-only. "Why did this dish get more expensive and when."
+model ProductCostHistory {
+  id         String  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  product_id String  @db.Uuid
+  variant_id String? @db.Uuid
+  recipe_id  String? @db.Uuid
+  batch_id   String? @db.Uuid
+
+  old_food_cost   Decimal? @db.Decimal(12, 4)
+  new_food_cost   Decimal  @db.Decimal(12, 4)
+  old_total_cost  Decimal? @db.Decimal(12, 4)
+  new_total_cost  Decimal  @db.Decimal(12, 4)
+  currency        String   @db.Char(3)
+  change_percent  Decimal? @db.Decimal(10, 4)
+  // ingredient_price | recipe_change | recipe_activated | packaging_change | manual | backfill
+  trigger         String   @db.VarChar(30)
+  changed_by_type String?  @db.VarChar(20)
+  changed_by_id   String?  @db.Uuid
+  changed_at      DateTime @default(now()) @db.Timestamptz(6)
+
+  batch IngredientPriceUpdateBatch? @relation(fields: [batch_id], references: [id], onDelete: SetNull)
+
+  @@index([product_id, changed_at(sort: Desc)])
+  @@index([batch_id])
+  @@index([changed_at(sort: Desc)])
+  @@map("product_cost_history")
+}
+
+// ============================================================================
+// §34: MODULE: Saved Order Templates & Recurring Schedules
+//
+// A template is a saved deal: either a fixed basket of products, or a saved
+// meal-plan brief (budget + nutrition targets + slot spec) re-solved against
+// today's menu every cycle. A schedule turns a template into a stream of
+// cycles; a cycle is one week (the canonical case) of deliveries the client
+// can adjust (headcount, skipped days) until its cutoff.
+//
+// The commercial levers stay with the kitchen: a template carries no pricing
+// list and no source menu, exactly as createCompanyPlan already enforces.
+// ============================================================================
+
+model OrderTemplate {
+  id          String  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  company_id  String  @db.Uuid
+  name        String  @db.VarChar(180)
+  description String?
+  kind        String  @default("fixed_basket") @db.VarChar(20) // fixed_basket | meal_plan_brief
+  status      String  @default("active") @db.VarChar(20) // active | archived
+  currency    String  @db.Char(3)
+
+  // Default delivery envelope; a schedule may override any of these.
+  fulfillment_type    FulfillmentType
+  delivery_address_id String?         @db.Uuid
+  department_id       String?         @db.Uuid
+  preferred_time      String?         @db.VarChar(8)
+  default_headcount   Int             @default(1)
+
+  // Provenance: set when the template was captured from a confirmed plan.
+  source_meal_plan_id String? @db.Uuid
+
+  // Brief, used only when kind = 'meal_plan_brief'. Mirrors PlanBriefInput
+  // minus pricingListId/sourceMenuId, which stay kitchen-side.
+  budget_per_meal     Decimal? @db.Decimal(12, 2)
+  min_calories_kcal   Decimal? @db.Decimal(10, 2)
+  max_calories_kcal   Decimal? @db.Decimal(10, 2)
+  min_protein_g       Decimal? @db.Decimal(10, 2)
+  max_protein_g       Decimal? @db.Decimal(10, 2)
+  min_carbs_g         Decimal? @db.Decimal(10, 2)
+  max_carbs_g         Decimal? @db.Decimal(10, 2)
+  max_fat_g           Decimal? @db.Decimal(10, 2)
+  // [{ componentType, quantity }] — same shape parseSlots() already reads.
+  slot_spec           Json?
+  exclude_allergens   String[] @db.VarChar(60)
+  variety_window_days Int      @default(2)
+
+  last_used_at DateTime? @db.Timestamptz(6)
+  use_count    Int       @default(0)
+
+  created_at      DateTime  @default(now()) @db.Timestamptz(6)
+  updated_at      DateTime  @updatedAt @db.Timestamptz(6)
+  deleted_at      DateTime? @db.Timestamptz(6)
+  created_by_type String?   @db.VarChar(20)
+  created_by_id   String?   @db.Uuid
+  updated_by_type String?   @db.VarChar(20)
+  updated_by_id   String?   @db.Uuid
+  is_deleted      Boolean   @default(false)
+  version         Int       @default(1)
+
+  company          Company         @relation(fields: [company_id], references: [id], onDelete: Cascade)
+  delivery_address CompanyAddress? @relation("OrderTemplateAddress", fields: [delivery_address_id], references: [id], onDelete: SetNull)
+  department       Department?     @relation(fields: [department_id], references: [id], onDelete: SetNull)
+  source_meal_plan MealPlan?       @relation("OrderTemplateSourcePlan", fields: [source_meal_plan_id], references: [id], onDelete: SetNull)
+
+  items     OrderTemplateItem[]
+  schedules OrderSchedule[]
+  cycles    OrderScheduleCycle[]
+
+  @@index([company_id, status])
+  @@index([source_meal_plan_id])
+  @@map("order_templates")
+}
+
+model OrderTemplateItem {
+  id                String  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  order_template_id String  @db.Uuid
+  product_id        String  @db.Uuid
+  variant_id        String? @db.Uuid
+  // Only meaningful for kind = 'meal_plan_brief'; mirrors meal_plan_items.component_type.
+  component_type    String? @db.VarChar(30)
+  quantity_mode     String  @default("per_head") @db.VarChar(20) // per_head | fixed
+  quantity          Int     @default(1)
+  notes             String?
+  // A pinned dish is reused verbatim every cycle instead of being re-solved.
+  is_pinned         Boolean @default(true)
+  sort_order        Int     @default(0)
+
+  template OrderTemplate             @relation(fields: [order_template_id], references: [id], onDelete: Cascade)
+  product  Product                   @relation(fields: [product_id], references: [id], onDelete: Restrict)
+  variant  ProductVariant?           @relation(fields: [variant_id], references: [id], onDelete: SetNull)
+  options  OrderTemplateItemOption[]
+
+  @@index([order_template_id])
+  @@index([product_id])
+  @@map("order_template_items")
+}
+
+model OrderTemplateItemOption {
+  id                     String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  order_template_item_id String @db.Uuid
+  product_option_id      String @db.Uuid
+
+  item   OrderTemplateItem @relation(fields: [order_template_item_id], references: [id], onDelete: Cascade)
+  option ProductOption     @relation(fields: [product_option_id], references: [id], onDelete: Restrict)
+
+  @@unique([order_template_item_id, product_option_id])
+  @@map("order_template_item_options")
+}
+
+model OrderSchedule {
+  id                String  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  company_id        String  @db.Uuid
+  order_template_id String  @db.Uuid
+  name              String  @db.VarChar(180)
+  is_active         Boolean @default(true)
+  // IANA zone; every day boundary, cutoff and preferred-time instant is
+  // resolved in this zone through kitchenDayResolver, never in UTC.
+  timezone          String  @default("Africa/Cairo") @db.VarChar(64)
+
+  frequency          String @default("weekly") @db.VarChar(20) // weekly | biweekly
+  interval_weeks     Int    @default(1)
+  // 0=Sun … 6=Sat.
+  weekdays           Int[]  @db.SmallInt
+  week_start_weekday Int    @default(0) @db.SmallInt
+
+  // anchor_date is the first cycle_start_date; next_cycle_start_date is the
+  // generator cursor and is the only field the background job advances.
+  // open_from_date is DERIVED (next_cycle_start_date - open_ahead_days) so the
+  // "which schedules are due" query is an indexed range scan, not a JS filter.
+  anchor_date           DateTime  @db.Date
+  next_cycle_start_date DateTime  @db.Date
+  open_from_date        DateTime  @db.Date
+  end_date              DateTime? @db.Date
+  max_cycles            Int?
+  cycles_generated      Int       @default(0)
+
+  headcount          Int     @default(1)
+  open_ahead_days    Int     @default(14)
+  cutoff_days_before Int     @default(2)
+  cutoff_time        String  @default("16:00") @db.VarChar(8)
+  auto_confirm       Boolean @default(false)
+
+  // Envelope override; falls back to the template when null.
+  fulfillment_type    FulfillmentType?
+  delivery_address_id String?          @db.Uuid
+  department_id       String?          @db.Uuid
+  preferred_time      String?          @db.VarChar(8)
+  // The company user the generated orders are placed as.
+  ordered_by_user_id  String           @db.Uuid
+
+  created_at      DateTime  @default(now()) @db.Timestamptz(6)
+  updated_at      DateTime  @updatedAt @db.Timestamptz(6)
+  deleted_at      DateTime? @db.Timestamptz(6)
+  created_by_type String?   @db.VarChar(20)
+  created_by_id   String?   @db.Uuid
+  updated_by_type String?   @db.VarChar(20)
+  updated_by_id   String?   @db.Uuid
+  is_deleted      Boolean   @default(false)
+  version         Int       @default(1)
+
+  company          Company         @relation(fields: [company_id], references: [id], onDelete: Cascade)
+  template         OrderTemplate   @relation(fields: [order_template_id], references: [id], onDelete: Restrict)
+  delivery_address CompanyAddress? @relation("OrderScheduleAddress", fields: [delivery_address_id], references: [id], onDelete: SetNull)
+  department       Department?     @relation(fields: [department_id], references: [id], onDelete: SetNull)
+  ordered_by       CompanyUser     @relation("OrderScheduleOrderedBy", fields: [ordered_by_user_id], references: [id], onDelete: Restrict)
+
+  cycles OrderScheduleCycle[]
+
+  @@index([company_id, is_active])
+  @@index([is_active, is_deleted, open_from_date])
+  @@index([order_template_id])
+  @@map("order_schedules")
+}
+
+model OrderScheduleCycle {
+  id                String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  order_schedule_id String @db.Uuid
+  // Denormalised so the dashboard pipeline board can filter by client without
+  // joining every schedule row.
+  company_id        String @db.Uuid
+  // Snapshot of the template in force when the cycle was opened.
+  order_template_id String @db.Uuid
+
+  sequence_number  Int
+  cycle_start_date DateTime @db.Date
+  cycle_end_date   DateTime @db.Date
+  // planned | confirmed | materializing | materialized | skipped | failed
+  status           String   @default("planned") @db.VarChar(20)
+  headcount        Int
+  cutoff_at        DateTime @db.Timestamptz(6)
+
+  confirmed_at DateTime? @db.Timestamptz(6)
+  confirmed_by String?   @db.Uuid
+
+  // Set for kind = 'meal_plan_brief': the dated plan solved for this cycle.
+  // Plans owned by a cycle are excluded from the client's own plan list and
+  // cannot be confirmed through the meal-plan endpoints.
+  meal_plan_id    String?   @unique @db.Uuid
+  // Written before the first order so a crashed run is always recoverable.
+  series_id       String?   @unique @db.Uuid
+  materialized_at DateTime? @db.Timestamptz(6)
+  order_count     Int       @default(0)
+  total_amount    Decimal   @default(0) @db.Decimal(14, 2)
+
+  skip_reason String? @db.VarChar(50) // client_skipped | not_confirmed_by_cutoff | schedule_paused
+  last_error  String?
+
+  created_at      DateTime @default(now()) @db.Timestamptz(6)
+  updated_at      DateTime @updatedAt @db.Timestamptz(6)
+  updated_by_type String?  @db.VarChar(20)
+  updated_by_id   String?  @db.Uuid
+
+  schedule  OrderSchedule           @relation(fields: [order_schedule_id], references: [id], onDelete: Cascade)
+  company   Company                 @relation(fields: [company_id], references: [id], onDelete: Cascade)
+  template  OrderTemplate           @relation(fields: [order_template_id], references: [id], onDelete: Restrict)
+  meal_plan MealPlan?               @relation("MealPlanScheduleCycle", fields: [meal_plan_id], references: [id], onDelete: SetNull)
+  series    OrderSeries?            @relation(fields: [series_id], references: [id], onDelete: SetNull)
+  days      OrderScheduleCycleDay[]
+
+  @@unique([order_schedule_id, cycle_start_date])
+  @@index([status, cutoff_at])
+  @@index([status, cycle_start_date])
+  @@index([company_id, cycle_start_date])
+  @@index([order_schedule_id, cycle_start_date])
+  @@map("order_schedule_cycles")
+}
+
+model OrderScheduleCycleDay {
+  id                      String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  order_schedule_cycle_id String   @db.Uuid
+  delivery_date           DateTime @db.Date
+  weekday                 Int      @db.SmallInt
+  headcount               Int
+  is_skipped              Boolean  @default(false)
+  preferred_time          String?  @db.VarChar(8)
+  order_id                String?  @db.Uuid
+  sort_order              Int      @default(0)
+
+  cycle OrderScheduleCycle @relation(fields: [order_schedule_cycle_id], references: [id], onDelete: Cascade)
+  order Order?             @relation("CycleDayOrder", fields: [order_id], references: [id], onDelete: SetNull)
+
+  @@unique([order_schedule_cycle_id, delivery_date])
+  @@index([order_schedule_cycle_id])
+  @@map("order_schedule_cycle_days")
+}
+
+// ============================================================================
+// §35: MODULE: Production Planning (kitchen prep) & Reporting reference data
+//
+// Nothing here is new capture. The live prep list is an aggregation over
+// `order_items` joined to `orders.requested_delivery_at` (§8). These tables
+// exist for one reason: the chef prints a sheet at 06:00 and orders keep
+// arriving at 07:00. `production_plans` freezes the numbers the kitchen
+// committed to, so the variance view can show what moved after the freeze.
+//
+// Cost columns are populated from product_costs (§33) at lock time and stay
+// NULL for any dish whose cost is not trustworthy. NULL means "cost unknown",
+// never zero.
+// ============================================================================
+
+model ProductionPlan {
+  id              String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  production_date DateTime @db.Date
+  // The zone the day window was computed in, frozen so a later settings change
+  // cannot silently re-slice a plan that is already on the pass.
+  time_zone       String   @db.VarChar(64)
+  window_start    DateTime @db.Timestamptz(6)
+  window_end      DateTime @db.Timestamptz(6)
+
+  status           String @default("locked") @db.VarChar(20) // locked | in_production | completed | cancelled
+  snapshot_version Int    @default(1)
+
+  locked_at    DateTime  @default(now()) @db.Timestamptz(6)
+  started_at   DateTime? @db.Timestamptz(6)
+  completed_at DateTime? @db.Timestamptz(6)
+
+  order_count            Int @default(0)
+  company_count          Int @default(0)
+  total_portions         Int @default(0)
+  estimated_prep_minutes Int @default(0)
+
+  // Derived from the day's orders, not from the platform default. currency_mismatch
+  // is set when the day holds more than one distinct order currency; the money
+  // totals are then not meaningful and the API flags them.
+  currency          String   @db.Char(3)
+  currency_mismatch Boolean  @default(false)
+  // Sum of order_items.line_total: items subtotal, NOT order revenue (which
+  // also carries tax, discount, service charge and delivery fee).
+  snapshot_subtotal Decimal  @default(0) @db.Decimal(14, 2)
+  snapshot_cost     Decimal? @db.Decimal(14, 2)
+  costed_portions   Int      @default(0)
+  uncosted_portions Int      @default(0)
+  notes             String?
+
+  created_at      DateTime  @default(now()) @db.Timestamptz(6)
+  updated_at      DateTime  @updatedAt @db.Timestamptz(6)
+  deleted_at      DateTime? @db.Timestamptz(6)
+  created_by_type String?   @db.VarChar(20)
+  created_by_id   String?   @db.Uuid
+  updated_by_type String?   @db.VarChar(20)
+  updated_by_id   String?   @db.Uuid
+  is_deleted      Boolean   @default(false)
+  version         Int       @default(1)
+
+  lines ProductionPlanLine[]
+
+  @@index([production_date])
+  @@index([status])
+  @@map("production_plans")
+}
+
+model ProductionPlanLine {
+  id                 String  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  production_plan_id String  @db.Uuid
+  product_id         String  @db.Uuid
+  variant_id         String? @db.Uuid
+
+  product_name_snapshot  String  @db.VarChar(255)
+  variant_name_snapshot  String? @db.VarChar(150)
+  category_id            String? @db.Uuid
+  category_name_snapshot String? @db.VarChar(150)
+  component_type         String? @db.VarChar(30) // protein | carb | vegetable | salad | soup | side | drink | dessert | other
+
+  // Portions, split by how firm the demand was at lock time.
+  confirmed_qty   Int @default(0) // payment_approved | kitchen_accepted | preparing
+  unconfirmed_qty Int @default(0) // submitted | pending_approval | awaiting_payment_proof | payment_pending_review
+  produced_qty    Int @default(0) // ready | out_for_delivery | awaiting_pickup | delivered | picked_up
+  // What the kitchen will actually cook. Seeded from confirmed_qty, then the
+  // chef may override it upward for waste/walk-ins.
+  planned_qty     Int
+
+  order_count    Int  @default(0)
+  company_count  Int  @default(0)
+  prep_time_mins Int?
+
+  // Items subtotal for this dish on this day.
+  line_subtotal      Decimal  @default(0) @db.Decimal(14, 2)
+  // NULL when the dish has no trustworthy cost. Never zero-filled.
+  unit_cost_snapshot Decimal? @db.Decimal(12, 4)
+  line_cost          Decimal? @db.Decimal(14, 2)
+
+  override_note String?
+  sort_order    Int     @default(0)
+
+  created_at      DateTime @default(now()) @db.Timestamptz(6)
+  updated_at      DateTime @updatedAt @db.Timestamptz(6)
+  updated_by_type String?  @db.VarChar(20)
+  updated_by_id   String?  @db.Uuid
+
+  plan    ProductionPlan  @relation(fields: [production_plan_id], references: [id], onDelete: Cascade)
+  product Product         @relation(fields: [product_id], references: [id], onDelete: Restrict)
+  variant ProductVariant? @relation(fields: [variant_id], references: [id], onDelete: SetNull)
+
+  @@index([production_plan_id])
+  @@index([product_id])
+  @@map("production_plan_lines")
+}
+
+/// Reference data for the budget-tier report. Buckets are half-open:
+/// `min_per_meal <= budget < max_per_meal`; `max_per_meal` NULL = top tier.
+model BudgetTier {
+  id           String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  code         String   @unique @db.VarChar(30)
+  name         String   @db.VarChar(100)
+  name_ar      String?  @db.VarChar(100)
+  currency     String   @db.Char(3)
+  min_per_meal Decimal  @db.Decimal(12, 2)
+  max_per_meal Decimal? @db.Decimal(12, 2)
+  sort_order   Int      @default(0)
+  is_active    Boolean  @default(true)
+
+  created_at      DateTime @default(now()) @db.Timestamptz(6)
+  updated_at      DateTime @updatedAt @db.Timestamptz(6)
+  updated_by_type String?  @db.VarChar(20)
+  updated_by_id   String?  @db.Uuid
+
+  @@index([currency, sort_order])
+  @@map("budget_tiers")
 }
