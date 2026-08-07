@@ -1,5 +1,6 @@
 import { Request, Response } from 'express';
 import * as service from './catalog.service';
+import * as customProducts from './custom-products.service';
 import * as imageService from './catalog.image.service';
 import { sendPaginated, sendSuccess } from '../../core/utils/response';
 import { BadRequestError } from '../../core/errors/AppError';
@@ -24,6 +25,7 @@ export async function deleteCategory(req: Request, res: Response): Promise<void>
 export async function listProducts(req: Request, res: Response): Promise<void> {
   const result = await service.listProducts({
     categoryId: req.query.categoryId as string | undefined,
+    search: req.query.search as string | undefined,
     page: req.query.page ? Number(req.query.page) : undefined,
     pageSize: req.query.pageSize ? Number(req.query.pageSize) : undefined,
   });
@@ -137,8 +139,52 @@ export async function assignCompanyPricingList(req: Request, res: Response): Pro
   sendSuccess(res, await service.assignCompanyPricingList(req.body), 201);
 }
 
+export async function deleteCompanyPricingAssignmentHandler(req: Request, res: Response): Promise<void> {
+  await service.deleteCompanyPricingAssignment(req.params.id!);
+  res.status(204).send();
+}
+
+export async function listCompanyCatalogAssignments(req: Request, res: Response): Promise<void> {
+  sendSuccess(
+    res,
+    await service.listCompanyCatalogAssignments({
+      companyId: req.query.companyId as string | undefined,
+      approvalStatus: req.query.approvalStatus as string | undefined,
+    }),
+  );
+}
+
 export async function getCompanyCatalogMenu(_req: Request, res: Response): Promise<void> {
   sendSuccess(res, await service.getCompanyCatalogMenu());
+}
+
+export async function getPublicCatalogMenu(_req: Request, res: Response): Promise<void> {
+  sendSuccess(res, await service.getPublicCatalogMenu());
+}
+
+export async function createCompanyCustomProduct(req: Request, res: Response): Promise<void> {
+  sendSuccess(res, await customProducts.createCompanyCustomProduct(req.body), 201);
+}
+
+export async function listCompanyCustomProducts(req: Request, res: Response): Promise<void> {
+  sendSuccess(res, await customProducts.listCompanyCustomProducts({
+    status: req.query.status as string | undefined,
+  }));
+}
+
+export async function listDashboardCustomProducts(req: Request, res: Response): Promise<void> {
+  sendSuccess(res, await customProducts.listDashboardCustomProducts({
+    status: req.query.status as string | undefined,
+    companyId: req.query.companyId as string | undefined,
+  }));
+}
+
+export async function approveCustomProduct(req: Request, res: Response): Promise<void> {
+  sendSuccess(res, await customProducts.approveCustomProduct(req.params.id!, req.body));
+}
+
+export async function rejectCustomProduct(req: Request, res: Response): Promise<void> {
+  sendSuccess(res, await customProducts.rejectCustomProduct(req.params.id!, req.body.reason));
 }
 
 export async function uploadProductImage(req: Request, res: Response): Promise<void> {

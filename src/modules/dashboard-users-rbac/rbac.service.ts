@@ -30,11 +30,27 @@ export async function listRoles() {
 }
 
 export async function getRole(roleId: string) {
-  const role = await prisma.role.findFirst({ where: { id: roleId, is_deleted: false } });
+  const role = await prisma.role.findFirst({
+    where: { id: roleId, is_deleted: false },
+    include: { page_permissions: true },
+  });
   if (!role) {
     throw new NotFoundError('Role not found');
   }
-  return serializeRole(role);
+  return {
+    ...serializeRole(role),
+    pagePermissions: role.page_permissions.map((p) => ({
+      pageId: p.page_id,
+      canView: p.can_view,
+      canCreate: p.can_create,
+      canEdit: p.can_edit,
+      canDelete: p.can_delete,
+      canApprove: p.can_approve,
+      canReject: p.can_reject,
+      canExport: p.can_export,
+      canImport: p.can_import,
+    })),
+  };
 }
 
 export async function listDashboardUsers(query: { page?: number; pageSize?: number }) {
@@ -187,25 +203,49 @@ export async function inviteDashboardUser(
     email: string;
     department?: string;
     temporaryPassword?: string;
+    roleIds?: string[];
   },
   actor: RequestActor,
 ) {
   const email = input.email.toLowerCase().trim();
   const password = input.temporaryPassword ?? 'ChangeMe123!';
   const passwordHash = await bcrypt.hash(password, 10);
+  const roleIds = input.roleIds ?? [];
 
   try {
-    const user = await prisma.dashboardUser.create({
-      data: {
-        full_name: input.fullName,
-        email,
-        password_hash: passwordHash,
-        department: input.department ?? null,
-        status: 'invited',
-        created_by_type: actor.type,
-        created_by_id: actor.id,
-      },
+    const user = await prisma.$transaction(async (tx) => {
+      const created = await tx.dashboardUser.create({
+        data: {
+          full_name: input.fullName,
+          email,
+          password_hash: passwordHash,
+          department: input.department ?? null,
+          status: 'invited',
+          created_by_type: actor.type,
+          created_by_id: actor.id,
+        },
+      });
+
+      if (roleIds.length > 0) {
+        await tx.dashboardUserRole.createMany({
+          data: roleIds.map((roleId) => ({
+            dashboard_user_id: created.id,
+            role_id: roleId,
+            assigned_by: actor.id,
+          })),
+        });
+      }
+
+      return created;
     });
+
+    if (roleIds.length > 0) {
+      await permissionResolver.invalidateUser(user.id);
+    }
+
+    const roles = roleIds.length
+      ? await prisma.role.findMany({ where: { id: { in: roleIds } }, select: { id: true, name: true } })
+      : [];
 
     return {
       id: user.id,
@@ -213,6 +253,8 @@ export async function inviteDashboardUser(
       email: user.email,
       status: user.status,
       department: user.department,
+      roles,
+      createdAt: user.created_at.toISOString(),
     };
   } catch (err) {
     if (isPrismaUniqueViolation(err)) {

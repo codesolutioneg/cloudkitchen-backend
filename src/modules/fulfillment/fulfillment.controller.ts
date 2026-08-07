@@ -6,6 +6,10 @@ export async function getCompanyFulfillmentQr(req: Request, res: Response): Prom
   sendSuccess(res, await service.getCompanyFulfillmentQr(req.params.id!));
 }
 
+export async function getDashboardFulfillmentQr(req: Request, res: Response): Promise<void> {
+  sendSuccess(res, await service.getDashboardFulfillmentQr(req.params.id!));
+}
+
 export async function assignDeliveryUser(req: Request, res: Response): Promise<void> {
   sendSuccess(res, await service.assignDeliveryUser(req.params.id!, req.body.deliveryUserId));
 }

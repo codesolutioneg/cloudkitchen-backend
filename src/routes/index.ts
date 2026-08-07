@@ -20,6 +20,9 @@ import jobsRouter from '../modules/jobs/jobs.routes';
 import integrationsRouter from '../modules/integrations/integrations.routes';
 import localizationRouter from '../modules/localization/localization.routes';
 import fulfillmentRouter from '../modules/fulfillment/fulfillment.routes';
+import analyticsRouter from '../modules/analytics/analytics.routes';
+import receiptsRouter from '../modules/receipts/receipt.routes';
+import assistantRouter from '../modules/assistant/assistant.routes';
 
 const router = Router();
 
@@ -44,5 +47,8 @@ router.use('/v1', jobsRouter);
 router.use('/v1', integrationsRouter);
 router.use('/v1', localizationRouter);
 router.use('/v1', fulfillmentRouter);
+router.use('/v1', analyticsRouter);
+router.use('/v1', receiptsRouter);
+router.use('/v1', assistantRouter);
 
 export default router;

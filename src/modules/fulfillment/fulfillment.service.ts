@@ -10,6 +10,7 @@ import { getRequestActor } from '../../core/middleware/requestContext';
 import { permissionResolver } from '../../engines/permissionResolver';
 import { timelineService } from '../../engines/timelineService';
 import { workflowEngine } from '../../engines/workflowEngine';
+import { assertOrderPaymentApprovedForOps } from '../../engines/orderPaymentGuards';
 
 export const FULFILLMENT_STEP_CODES = {
   READY: 'ready',
@@ -197,6 +198,32 @@ export async function getCompanyFulfillmentQr(orderId: string) {
   if (!order) {
     throw new NotFoundError('Order not found');
   }
+  return serializeFulfillmentQr(order);
+}
+
+/** Kitchen / operations / order viewers can load QR so staff can show it to the driver. */
+export async function getDashboardFulfillmentQr(orderId: string) {
+  const actor = getDashboardActorOrThrow();
+  const [canKitchenOps, canOrders, canDelivery] = await Promise.all([
+    canOnKitchenOrOperations('view'),
+    permissionResolver.canAsync(actor.id, '/dashboard/orders', 'view'),
+    permissionResolver.canAsync(actor.id, '/dashboard/delivery', 'view'),
+  ]);
+  if (!canKitchenOps && !canOrders && !canDelivery) {
+    throw new ForbiddenError('Not allowed to view fulfillment QR');
+  }
+
+  const order = await getOrderWithWorkflow(orderId);
+  return serializeFulfillmentQr(order);
+}
+
+function serializeFulfillmentQr(order: {
+  id: string;
+  order_number: string;
+  fulfillment_type: FulfillmentType;
+  fulfillment_qr_token: string | null;
+  workflow_instance: { current_step: { code: string } } | null;
+}) {
   if (!order.fulfillment_qr_token) {
     throw new BadRequestError('Order has no fulfillment QR token');
   }
@@ -216,6 +243,7 @@ export async function getCompanyFulfillmentQr(orderId: string) {
 
 export async function assignDeliveryUser(orderId: string, deliveryUserId: string) {
   await assertKitchenOrOperations('edit');
+  await assertOrderPaymentApprovedForOps(orderId);
   const actor = getDashboardActorOrThrow();
 
   const order = await getOrderWithWorkflow(orderId);
@@ -304,6 +332,7 @@ export async function listMyDeliveryOrders() {
 }
 
 export async function departForDelivery(orderId: string) {
+  await assertOrderPaymentApprovedForOps(orderId);
   const actor = getDashboardActorOrThrow();
   const order = await getOrderWithWorkflow(orderId);
 
@@ -332,6 +361,7 @@ export async function departForDelivery(orderId: string) {
 }
 
 export async function confirmDeliveryByQr(orderId: string, qrToken: string) {
+  await assertOrderPaymentApprovedForOps(orderId);
   const actor = getDashboardActorOrThrow();
   const order = await getOrderWithWorkflow(orderId);
 
@@ -377,6 +407,7 @@ export async function confirmDeliveryByQr(orderId: string, qrToken: string) {
 
 export async function markAwaitingPickup(orderId: string) {
   await assertKitchenOrOperations('edit');
+  await assertOrderPaymentApprovedForOps(orderId);
   const order = await getOrderWithWorkflow(orderId);
 
   if (order.fulfillment_type !== FulfillmentType.pickup) {
@@ -393,6 +424,7 @@ export async function markAwaitingPickup(orderId: string) {
 
 export async function confirmPickup(orderId: string) {
   await assertKitchenOrOperations('edit');
+  await assertOrderPaymentApprovedForOps(orderId);
   const order = await getOrderWithWorkflow(orderId);
 
   if (order.fulfillment_type !== FulfillmentType.pickup) {

@@ -25,7 +25,7 @@ function getModelsWithField(fieldName: string): Set<string> {
 const SOFT_DELETE_MODELS = getModelsWithField('is_deleted');
 const TENANT_SCOPED_MODELS = getModelsWithField('company_id');
 /** Models where `company_id: null` means platform-global and must remain visible to company users. */
-const TENANT_SCOPED_WITH_GLOBAL_NULL = new Set(['Workflow', 'ApprovalWorkflow']);
+const TENANT_SCOPED_WITH_GLOBAL_NULL = new Set(['Workflow', 'ApprovalWorkflow', 'Product']);
 const AUDITABLE_MODELS = getModelsWithField('created_by_type');
 
 type WhereInput = Record<string, unknown> | undefined;

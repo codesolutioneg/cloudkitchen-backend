@@ -60,8 +60,26 @@ export async function listApprovalWorkflows(query?: {
   const rows = await prisma.approvalWorkflow.findMany({
     where,
     orderBy: { name: 'asc' },
+    include: { _count: { select: { steps: true } } },
   });
-  return rows.map(serializeWorkflow);
+  return rows.map((row) => ({
+    ...serializeWorkflow(row),
+    stepCount: row._count.steps,
+  }));
+}
+
+export async function getApprovalWorkflow(id: string) {
+  const row = await prisma.approvalWorkflow.findUnique({
+    where: { id },
+    include: { _count: { select: { steps: true } } },
+  });
+  if (!row) {
+    throw new NotFoundError('Approval workflow not found');
+  }
+  return {
+    ...serializeWorkflow(row),
+    stepCount: row._count.steps,
+  };
 }
 
 export async function createApprovalWorkflow(input: {

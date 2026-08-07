@@ -56,9 +56,12 @@ const envSchema = z.object({
 
   INTEGRATIONS_DEFAULT_EXTERNAL_SYSTEM: z.string().default('odoo'),
 
-  BUSINESS_DEFAULT_CURRENCY: z.string().default('SAR'),
-  BUSINESS_DEFAULT_TIMEZONE: z.string().default('Asia/Riyadh'),
-  BUSINESS_DEFAULT_LANGUAGE: z.string().default('en'),
+  BUSINESS_DEFAULT_CURRENCY: z.string().default('EGP'),
+  BUSINESS_DEFAULT_TIMEZONE: z.string().default('Africa/Cairo'),
+  BUSINESS_DEFAULT_LANGUAGE: z.string().default('ar'),
+
+  GEMINI_API_KEY: z.string().optional(),
+  GEMINI_MODEL: z.string().default('gemini-2.5-flash'),
 });
 
 const parsed = envSchema.safeParse(process.env);

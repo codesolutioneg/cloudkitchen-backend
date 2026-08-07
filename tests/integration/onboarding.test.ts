@@ -195,4 +195,22 @@ describe('Company onboarding documents', () => {
       attachmentType: 'commercial_registration',
     });
   });
+
+  it('lists uploaded onboarding documents for the caller company', async () => {
+    const res = await request(app)
+      .get('/api/v1/company/onboarding/documents')
+      .set(authHeaders());
+
+    expect(res.status).toBe(200);
+    expect(res.body.success).toBe(true);
+    expect(res.body.data).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          companyId,
+          attachmentType: 'commercial_registration',
+          verificationStatus: 'pending',
+        }),
+      ]),
+    );
+  });
 });

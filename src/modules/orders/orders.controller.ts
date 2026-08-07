@@ -1,5 +1,7 @@
 import { Request, Response } from 'express';
 import * as service from './orders.service';
+import * as paymentService from './order-payment.service';
+import * as scheduleService from './orders-schedule.service';
 import { sendPaginated, sendSuccess } from '../../core/utils/response';
 import { getRequestActor } from '../../core/middleware/requestContext';
 import { ForbiddenError } from '../../core/errors/AppError';
@@ -64,6 +66,10 @@ export async function getDashboardOrder(req: Request, res: Response): Promise<vo
   sendSuccess(res, await service.getDashboardOrder(req.params.id!));
 }
 
+export async function updateDashboardOrder(req: Request, res: Response): Promise<void> {
+  sendSuccess(res, await service.updateDashboardOrder(req.params.id!, req.body));
+}
+
 export async function transitionDashboardOrder(req: Request, res: Response): Promise<void> {
   sendSuccess(res, await service.transitionDashboardOrder(req.params.id!, req.body));
 }
@@ -90,4 +96,34 @@ export async function decideDashboardOrderApproval(req: Request, res: Response):
       actor,
     ),
   );
+}
+
+export async function scheduleOrders(req: Request, res: Response): Promise<void> {
+  sendSuccess(res, await scheduleService.scheduleOrders(req.body), 201);
+}
+
+export async function getOrderCalendar(req: Request, res: Response): Promise<void> {
+  sendSuccess(
+    res,
+    await scheduleService.getOrderCalendar({
+      from: req.query.from as string,
+      to: req.query.to as string,
+    }),
+  );
+}
+
+export async function submitPaymentProof(req: Request, res: Response): Promise<void> {
+  sendSuccess(res, await paymentService.submitPaymentProof(req.params.id!, req.body.proofAttachmentId));
+}
+
+export async function approvePayment(req: Request, res: Response): Promise<void> {
+  sendSuccess(res, await paymentService.approvePayment(req.params.id!, req.body.comment));
+}
+
+export async function rejectPayment(req: Request, res: Response): Promise<void> {
+  sendSuccess(res, await paymentService.rejectPayment(req.params.id!, req.body.reason));
+}
+
+export async function getOrderPayment(req: Request, res: Response): Promise<void> {
+  sendSuccess(res, await paymentService.getOrderPayment(req.params.id!));
 }

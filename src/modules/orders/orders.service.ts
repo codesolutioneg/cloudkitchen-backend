@@ -16,6 +16,8 @@ import { menuResolver } from '../../engines/menuResolver';
 import { timelineService } from '../../engines/timelineService';
 import { computeSlaDueAt, workflowEngine } from '../../engines/workflowEngine';
 import { workflowActionDispatcher } from '../../engines/workflowActionDispatcher';
+import { assertCanCancelOrder, assertDashboardTransitionAllowed } from '../../engines/orderPaymentGuards';
+import * as customProductsService from '../catalog/custom-products.service';
 
 export interface ListOrdersQuery {
   page?: number;
@@ -87,15 +89,22 @@ function extractNumberField(value: unknown, keys: string[]): number | undefined 
   return undefined;
 }
 
-async function assertProductOnMenu(menuId: string, productId: string) {
+async function assertProductOnMenu(menuId: string, productId: string, companyId?: string) {
+  if (companyId) {
+    const customOk = await customProductsService.isOrderableCustomProduct(productId, companyId);
+    if (customOk) return;
+  }
+
   const assignment = await prisma.catalogMenuProduct.findFirst({
     where: {
       product_id: productId,
       section: { catalog_menu_id: menuId },
-      product: { is_active: true, is_deleted: false },
+    },
+    include: {
+      product: { select: { is_active: true, is_deleted: true } },
     },
   });
-  if (!assignment) {
+  if (!assignment?.product || !assignment.product.is_active || assignment.product.is_deleted) {
     throw new BadRequestError(`Product is not available on your assigned menu`);
   }
 }
@@ -112,7 +121,14 @@ function serializeOrderSummary(order: {
   workflow_instance?: {
     current_step: { code: string; name: string };
   } | null;
+  payment?: { status: string; rejection_reason: string | null } | null;
 }) {
+  const stepCode = order.workflow_instance?.current_step.code ?? null;
+  const paymentStatus = order.payment?.status ?? null;
+  const needsPaymentProof =
+    stepCode === 'awaiting_payment_proof' ||
+    paymentStatus === 'awaiting_proof' ||
+    paymentStatus === 'rejected';
   return {
     id: order.id,
     orderNumber: order.order_number,
@@ -122,8 +138,11 @@ function serializeOrderSummary(order: {
     requestedDeliveryAt: order.requested_delivery_at.toISOString(),
     fulfillmentType: order.fulfillment_type,
     createdAt: order.created_at.toISOString(),
-    currentStepCode: order.workflow_instance?.current_step.code ?? null,
+    currentStepCode: stepCode,
     currentStepName: order.workflow_instance?.current_step.name ?? null,
+    paymentStatus,
+    paymentRejectionReason: order.payment?.rejection_reason ?? null,
+    needsPaymentProof,
   };
 }
 
@@ -148,6 +167,13 @@ function serializeOrderDetail(
     source_channel: string;
     is_bulk_order: boolean;
     created_at: Date;
+    series_id?: string | null;
+    payment?: {
+      status: string;
+      proof_attachment_id: string | null;
+      receipt_file_id: string | null;
+      rejection_reason: string | null;
+    } | null;
     items: Array<{
       id: string;
       product_id: string;
@@ -270,6 +296,15 @@ function serializeOrderDetail(
       decidedAt: a.decided_at?.toISOString() ?? null,
       comment: a.comment,
     })),
+    payment: order.payment
+      ? {
+          status: order.payment.status,
+          proofAttachmentId: order.payment.proof_attachment_id,
+          receiptFileId: order.payment.receipt_file_id,
+          rejectionReason: order.payment.rejection_reason,
+        }
+      : null,
+    seriesId: order.series_id ?? null,
   };
 }
 
@@ -279,6 +314,7 @@ const orderDetailInclude = {
   notes: { orderBy: { created_at: 'asc' as const } },
   approvals: { orderBy: { approval_level: 'asc' as const } },
   workflow_instance: { include: { current_step: true } },
+  payment: true,
 };
 
 async function getOrderOrThrow(orderId: string, companyScope?: Prisma.OrderWhereInput) {
@@ -336,6 +372,48 @@ async function validateOrderingRules(
     if (requestedDeliveryAt < minDeliveryAt) {
       throw new BadRequestError(`Requested delivery must be at least ${noticeHours} hours from now`);
     }
+  }
+}
+
+async function validateMinDailyOrderAmount(
+  companyId: string,
+  departmentId: string | undefined,
+  userId: string,
+  requestedDeliveryAt: Date,
+  additionalAmount: number,
+) {
+  const minDailyRule = await businessRuleResolver.resolve({
+    ruleTypeCode: 'min_daily_order_amount',
+    companyId,
+    departmentId,
+    userId,
+  });
+
+  const minAmount = extractNumberField(minDailyRule, ['amount', 'minAmount', 'value']);
+  if (minAmount === undefined) return;
+
+  const dayStart = new Date(requestedDeliveryAt);
+  dayStart.setUTCHours(0, 0, 0, 0);
+  const dayEnd = new Date(dayStart);
+  dayEnd.setUTCDate(dayEnd.getUTCDate() + 1);
+
+  const existing = await prisma.order.aggregate({
+    where: {
+      company_id: companyId,
+      is_deleted: false,
+      requested_delivery_at: { gte: dayStart, lt: dayEnd },
+      workflow_instance: {
+        current_step: { code: { notIn: ['cancelled', 'refunded'] } },
+      },
+    },
+    _sum: { total_amount: true },
+  });
+
+  const existingTotal = Number(existing._sum.total_amount ?? 0);
+  if (existingTotal + additionalAmount < minAmount) {
+    throw new BadRequestError(
+      `Minimum daily order total is ${minAmount} EGP for this date (current: ${existingTotal}, after this order: ${existingTotal + additionalAmount})`,
+    );
   }
 }
 
@@ -408,7 +486,7 @@ export async function createOrder(input: CreateOrderInput) {
       throw new BadRequestError('Item quantity must be at least 1');
     }
 
-    await assertProductOnMenu(menuId, item.productId);
+    await assertProductOnMenu(menuId, item.productId, actor.companyId);
 
     const product = await prisma.product.findFirst({
       where: { id: item.productId, is_deleted: false, is_active: true },
@@ -465,13 +543,26 @@ export async function createOrder(input: CreateOrderInput) {
   const totalAmount = subtotal.add(taxAmount);
 
   const workflow = await workflowEngine.resolveWorkflowForEntity('order', actor.companyId);
-  const initialStep = await prisma.workflowStep.findFirst({
-    where: { workflow_id: workflow.id, step_type: 'initial' },
-    orderBy: { sort_order: 'asc' },
+  let initialStep = await prisma.workflowStep.findFirst({
+    where: { workflow_id: workflow.id, code: 'awaiting_payment_proof' },
   });
+  if (!initialStep) {
+    initialStep = await prisma.workflowStep.findFirst({
+      where: { workflow_id: workflow.id, step_type: 'initial' },
+      orderBy: { sort_order: 'asc' },
+    });
+  }
   if (!initialStep) {
     throw new BadRequestError('Order workflow has no initial step');
   }
+
+  await validateMinDailyOrderAmount(
+    actor.companyId,
+    departmentId,
+    actor.id,
+    requestedDeliveryAt,
+    Number(totalAmount),
+  );
 
   const enteredAt = new Date();
   const slaDueAt = computeSlaDueAt(enteredAt, initialStep.sla_minutes);
@@ -577,6 +668,13 @@ export async function createOrder(input: CreateOrderInput) {
       },
     });
 
+    await tx.orderPayment.create({
+      data: {
+        order_id: order.id,
+        status: 'awaiting_proof',
+      },
+    });
+
     return { order, instance, initialStepId: initialStep.id };
   });
 
@@ -607,7 +705,10 @@ export async function listCompanyOrders(query: ListOrdersQuery) {
       orderBy: { created_at: 'desc' },
       skip,
       take: pageSize,
-      include: { workflow_instance: { include: { current_step: true } } },
+      include: {
+        workflow_instance: { include: { current_step: true } },
+        payment: true,
+      },
     }),
     prisma.order.count({ where }),
   ]);
@@ -697,6 +798,8 @@ export async function cancelCompanyOrder(orderId: string, reasonText?: string) {
   const actor = getCompanyActorOrThrow();
   const order = await getOrderOrThrow(orderId, { company_id: actor.companyId });
 
+  await assertCanCancelOrder(orderId);
+
   if (!order.workflow_instance_id || !order.workflow_instance) {
     throw new BadRequestError('Order has no workflow instance');
   }
@@ -753,6 +856,57 @@ export async function cancelCompanyOrder(orderId: string, reasonText?: string) {
   return getCompanyOrder(orderId);
 }
 
+export async function updateDashboardOrder(
+  orderId: string,
+  input: {
+    requestedDeliveryAt?: string;
+    fulfillmentType?: 'delivery' | 'pickup';
+    deliveryAddressId?: string | null;
+  },
+) {
+  const actor = getDashboardActorOrThrow();
+  const order = await getOrderOrThrow(orderId);
+
+  const stepCode = order.workflow_instance?.current_step?.code;
+  const locked = ['delivered', 'picked_up', 'cancelled', 'refunded'];
+  if (stepCode && locked.includes(stepCode)) {
+    throw new BadRequestError('Cannot edit a completed or cancelled order');
+  }
+
+  const data: Prisma.OrderUpdateInput = {
+    updated_by_type: actor.type,
+    updated_by_id: actor.id,
+  };
+
+  if (input.requestedDeliveryAt !== undefined) {
+    const d = new Date(input.requestedDeliveryAt);
+    if (Number.isNaN(d.getTime())) {
+      throw new BadRequestError('Invalid delivery date');
+    }
+    data.requested_delivery_at = d;
+  }
+  if (input.fulfillmentType !== undefined) {
+    data.fulfillment_type = input.fulfillmentType;
+  }
+  if (input.deliveryAddressId !== undefined) {
+    data.delivery_address = input.deliveryAddressId
+      ? { connect: { id: input.deliveryAddressId } }
+      : { disconnect: true };
+  }
+
+  await prisma.order.update({ where: { id: orderId }, data });
+
+  await timelineService.recordTimelineEvent({
+    entityType: 'order',
+    entityId: orderId,
+    eventCode: 'order.updated',
+    actorType: actor.type,
+    actorId: actor.id,
+  });
+
+  return getDashboardOrder(orderId);
+}
+
 export async function transitionDashboardOrder(
   orderId: string,
   input: { toStepId: string; comment?: string; context?: Record<string, unknown> },
@@ -762,6 +916,11 @@ export async function transitionDashboardOrder(
 
   if (!order.workflow_instance_id) {
     throw new BadRequestError('Order has no workflow instance');
+  }
+
+  const targetStep = await prisma.workflowStep.findUnique({ where: { id: input.toStepId } });
+  if (targetStep) {
+    await assertDashboardTransitionAllowed(orderId, targetStep.code);
   }
 
   const transitionResult = await workflowEngine.transition({

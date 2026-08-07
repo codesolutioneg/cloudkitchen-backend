@@ -11,7 +11,7 @@ export const assignDeliverySchema = z.object({
 });
 
 export const confirmDeliveryQrSchema = z.object({
-  qrToken: z.string().min(8).max(64),
+  qrToken: z.string().min(8).max(128),
 });
 
 const deliveryAddressSchema = z.object({

@@ -18,6 +18,10 @@ export async function updateMenu(req: Request, res: Response): Promise<void> {
   sendSuccess(res, await service.updateMenu(req.params.id!, req.body));
 }
 
+export async function setGeneralMenu(req: Request, res: Response): Promise<void> {
+  sendSuccess(res, await service.setGeneralMenu(req.params.id!));
+}
+
 export async function deleteMenu(req: Request, res: Response): Promise<void> {
   await service.deleteMenu(req.params.id!);
   res.status(204).send();

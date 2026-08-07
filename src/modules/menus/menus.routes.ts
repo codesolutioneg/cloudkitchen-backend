@@ -47,6 +47,13 @@ router.patch(
   validate(updateMenuSchema),
   asyncHandler(controller.updateMenu),
 );
+router.post(
+  '/dashboard/menus/:id/set-general',
+  auth,
+  canEdit,
+  validate(menuIdParamsSchema, 'params'),
+  asyncHandler(controller.setGeneralMenu),
+);
 router.delete(
   '/dashboard/menus/:id',
   auth,

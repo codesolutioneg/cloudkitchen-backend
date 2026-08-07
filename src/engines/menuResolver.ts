@@ -60,6 +60,12 @@ export async function resolveProductPrice(
     throw new Error(`Product ${productId} not found`);
   }
 
+  if (product.company_id) {
+    if (product.approval_status !== 'approved' || !product.is_active || product.base_price == null) {
+      throw new Error(`Custom product ${productId} is not approved for ordering`);
+    }
+  }
+
   const companyAssignment = await prisma.companyPricingListAssignment.findFirst({
     where: {
       company_id: companyId,
@@ -104,7 +110,7 @@ export async function resolveProductPrice(
   }
 
   return {
-    price: product.base_price,
+    price: product.base_price ?? new Decimal(0),
     currency: product.currency,
     source: 'base_price',
   };

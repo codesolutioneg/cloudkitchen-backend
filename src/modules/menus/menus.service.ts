@@ -1,4 +1,5 @@
 import { prisma } from '../../prisma/client';
+import { toPublicUploadUrl } from '../catalog/catalog.image.service';
 import { NotFoundError } from '../../core/errors/AppError';
 
 function serializeMenu(menu: {
@@ -118,6 +119,29 @@ export async function updateMenu(
     },
   });
   return serializeMenu(menu);
+}
+
+/** Mark one menu as the platform general menu (guest / default catalog). */
+export async function setGeneralMenu(menuId: string) {
+  const existing = await prisma.catalogMenu.findUnique({ where: { id: menuId } });
+  if (!existing) {
+    throw new NotFoundError('Menu not found');
+  }
+
+  await prisma.$transaction([
+    prisma.catalogMenu.updateMany({
+      where: { menu_type: 'general', id: { not: menuId } },
+      data: { menu_type: 'standard' },
+    }),
+    prisma.catalogMenu.update({
+      where: { id: menuId },
+      data: { menu_type: 'general', is_active: true },
+    }),
+  ]);
+
+  return serializeMenu(
+    (await prisma.catalogMenu.findUnique({ where: { id: menuId } }))!,
+  );
 }
 
 export async function deleteMenu(menuId: string) {
@@ -262,7 +286,18 @@ export async function listSectionProducts(menuId: string, sectionId: string) {
     include: {
       products: {
         orderBy: { sort_order: 'asc' },
-        include: { product: { select: { id: true, name: true, sku: true, visibility: true } } },
+        include: {
+          product: {
+            select: {
+              id: true,
+              name: true,
+              sku: true,
+              visibility: true,
+              image_url: true,
+              media: { where: { is_primary: true }, take: 1, select: { url: true } },
+            },
+          },
+        },
       },
     },
   });
@@ -273,7 +308,17 @@ export async function listSectionProducts(menuId: string, sectionId: string) {
     productId: p.product_id,
     sortOrder: p.sort_order,
     isFeatured: p.is_featured,
-    product: p.product,
+    product: {
+      id: p.product.id,
+      name: p.product.name,
+      sku: p.product.sku,
+      visibility: p.product.visibility,
+      imageUrl: p.product.image_url
+        ? toPublicUploadUrl(p.product.image_url)
+        : p.product.media[0]?.url
+          ? toPublicUploadUrl(p.product.media[0].url)
+          : null,
+    },
   }));
 }
 
@@ -315,7 +360,7 @@ export async function listAssignments(menuId: string) {
     throw new NotFoundError('Menu not found');
   }
   const assignments = await prisma.menuAssignment.findMany({
-    where: { catalog_menu_id: menuId },
+    where: { catalog_menu_id: menuId, is_active: true },
     orderBy: [{ priority: 'desc' }, { effective_from: 'desc' }],
   });
   return assignments.map(serializeAssignment);

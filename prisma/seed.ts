@@ -72,25 +72,27 @@ const MODULES: Array<{ code: string; name: string; audience: 'company' | 'dashbo
   { code: 'import_excel', name: 'Import Excel', audience: 'dashboard' },
 ];
 
-const DASHBOARD_PAGES: Array<{ name: string; route: string; sortOrder: number }> = [
-  { name: 'Companies', route: '/dashboard/companies', sortOrder: 10 },
-  { name: 'Roles', route: '/dashboard/roles', sortOrder: 20 },
-  { name: 'Users', route: '/dashboard/users', sortOrder: 30 },
-  { name: 'Features', route: '/dashboard/features', sortOrder: 40 },
-  { name: 'Catalog', route: '/dashboard/catalog', sortOrder: 50 },
-  { name: 'Menus', route: '/dashboard/menus', sortOrder: 60 },
-  { name: 'Rules', route: '/dashboard/rules', sortOrder: 70 },
-  { name: 'Workflows', route: '/dashboard/workflows', sortOrder: 80 },
-  { name: 'Orders', route: '/dashboard/orders', sortOrder: 85 },
-  { name: 'Kitchen', route: '/dashboard/kitchen', sortOrder: 84 },
-  { name: 'Operations Desk', route: '/dashboard/operations', sortOrder: 86 },
-  { name: 'Delivery', route: '/dashboard/delivery', sortOrder: 87 },
-  { name: 'Approval Workflows', route: '/dashboard/approval-workflows', sortOrder: 90 },
-  { name: 'Audit Logs', route: '/dashboard/audit-logs', sortOrder: 95 },
-  { name: 'Notifications', route: '/dashboard/notifications', sortOrder: 96 },
-  { name: 'Jobs', route: '/dashboard/jobs', sortOrder: 97 },
-  { name: 'Integrations', route: '/dashboard/integrations', sortOrder: 98 },
-  { name: 'Localization', route: '/dashboard/localization', sortOrder: 99 },
+const DASHBOARD_PAGES: Array<{ name: string; route: string; sortOrder: number; icon?: string }> = [
+  { name: 'Dashboard', route: '/dashboard', sortOrder: 1, icon: 'LayoutDashboard' },
+  { name: 'Companies', route: '/dashboard/companies', sortOrder: 10, icon: 'Building2' },
+  { name: 'Roles', route: '/dashboard/roles', sortOrder: 20, icon: 'Shield' },
+  { name: 'Users', route: '/dashboard/users', sortOrder: 30, icon: 'Users' },
+  { name: 'Features', route: '/dashboard/features', sortOrder: 40, icon: 'Settings2' },
+  { name: 'Catalog', route: '/dashboard/catalog', sortOrder: 50, icon: 'Boxes' },
+  { name: 'Menus', route: '/dashboard/menus', sortOrder: 60, icon: 'UtensilsCrossed' },
+  { name: 'Rules', route: '/dashboard/rules', sortOrder: 70, icon: 'ScrollText' },
+  { name: 'Workflows', route: '/dashboard/workflows', sortOrder: 80, icon: 'Workflow' },
+  { name: 'Kitchen', route: '/dashboard/kitchen', sortOrder: 84, icon: 'ChefHat' },
+  { name: 'Orders', route: '/dashboard/orders', sortOrder: 85, icon: 'ShoppingBag' },
+  { name: 'Operations Desk', route: '/dashboard/operations', sortOrder: 86, icon: 'PackageCheck' },
+  { name: 'Delivery', route: '/dashboard/delivery', sortOrder: 87, icon: 'Truck' },
+  { name: 'Approval Workflows', route: '/dashboard/approval-workflows', sortOrder: 90, icon: 'ClipboardCheck' },
+  { name: 'Audit Logs', route: '/dashboard/audit-logs', sortOrder: 95, icon: 'History' },
+  { name: 'Notifications', route: '/dashboard/notifications', sortOrder: 96, icon: 'Bell' },
+  { name: 'Jobs', route: '/dashboard/jobs', sortOrder: 97, icon: 'Cog' },
+  { name: 'Integrations', route: '/dashboard/integrations', sortOrder: 98, icon: 'Database' },
+  { name: 'Localization', route: '/dashboard/localization', sortOrder: 99, icon: 'Languages' },
+  { name: 'Settings', route: '/dashboard/settings', sortOrder: 100, icon: 'Settings2' },
 ];
 
 async function seedLanguages() {
@@ -209,6 +211,7 @@ async function seedDashboardPages(superAdminRoleId: string) {
           name: p.name,
           route: p.route,
           sort_order: p.sortOrder,
+          icon: p.icon ?? null,
           is_enabled: true,
           is_visible: true,
         },
@@ -216,7 +219,13 @@ async function seedDashboardPages(superAdminRoleId: string) {
     } else {
       page = await prisma.dashboardPage.update({
         where: { id: page.id },
-        data: { name: p.name, sort_order: p.sortOrder, is_enabled: true, is_visible: true },
+        data: {
+          name: p.name,
+          sort_order: p.sortOrder,
+          icon: p.icon ?? page.icon,
+          is_enabled: true,
+          is_visible: true,
+        },
       });
     }
     pages[p.route] = page.id;
@@ -328,11 +337,11 @@ async function seedDashboardUsers(superAdminRoleId: string) {
 async function seedDefaultPricingList() {
   await prisma.productPricingList.upsert({
     where: { id: '00000000-0000-4000-8000-000000000099' },
-    update: { is_default: true, name: 'Default SAR', currency: 'SAR' },
+    update: { is_default: true, name: 'Default EGP', currency: 'EGP' },
     create: {
       id: '00000000-0000-4000-8000-000000000099',
-      name: 'Default SAR',
-      currency: 'SAR',
+      name: 'Default EGP',
+      currency: 'EGP',
       is_default: true,
     },
   });
@@ -340,6 +349,7 @@ async function seedDefaultPricingList() {
 
 const RULE_TYPES: Array<{ code: string; name: string; valueSchema?: Record<string, unknown> }> = [
   { code: 'min_order_qty', name: 'Minimum Order Quantity', valueSchema: { type: 'number' } },
+  { code: 'min_daily_order_amount', name: 'Minimum Daily Order Amount', valueSchema: { type: 'object' } },
   { code: 'max_order_qty', name: 'Maximum Order Quantity', valueSchema: { type: 'number' } },
   { code: 'min_notice_hours', name: 'Minimum Notice Hours', valueSchema: { type: 'number' } },
   {
@@ -374,6 +384,24 @@ const GLOBAL_SETTINGS: Array<{
   isOverridable: boolean;
   description: string;
 }> = [
+  {
+    key: 'business.default_currency',
+    value: process.env.BUSINESS_DEFAULT_CURRENCY ?? 'EGP',
+    isOverridable: true,
+    description: 'Default currency (ISO 4217) for new products, pricing lists, and display',
+  },
+  {
+    key: 'business.default_timezone',
+    value: process.env.BUSINESS_DEFAULT_TIMEZONE ?? 'Africa/Cairo',
+    isOverridable: true,
+    description: 'Default timezone for scheduling and reports',
+  },
+  {
+    key: 'business.default_language',
+    value: process.env.BUSINESS_DEFAULT_LANGUAGE ?? 'ar',
+    isOverridable: true,
+    description: 'Default language code for the platform',
+  },
   {
     key: 'theme.primary_color',
     value: '#2563eb',
@@ -544,7 +572,7 @@ async function seedOrderCatalogData() {
     update: {
       name: 'Chicken Meal',
       base_price: 45,
-      currency: 'SAR',
+      currency: 'EGP',
       is_active: true,
       is_deleted: false,
     },
@@ -553,7 +581,7 @@ async function seedOrderCatalogData() {
       category_id: SEED_CATEGORY_ID,
       name: 'Chicken Meal',
       base_price: 45,
-      currency: 'SAR',
+      currency: 'EGP',
       is_active: true,
     },
   });

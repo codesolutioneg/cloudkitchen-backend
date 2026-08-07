@@ -20,6 +20,10 @@ export async function updateApprovalWorkflow(req: Request, res: Response): Promi
   sendSuccess(res, await service.updateApprovalWorkflow(req.params.id!, req.body));
 }
 
+export async function getApprovalWorkflow(req: Request, res: Response): Promise<void> {
+  sendSuccess(res, await service.getApprovalWorkflow(req.params.id!));
+}
+
 export async function listApprovalWorkflowSteps(req: Request, res: Response): Promise<void> {
   sendSuccess(res, await service.listApprovalWorkflowSteps(req.params.id!));
 }

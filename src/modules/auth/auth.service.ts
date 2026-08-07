@@ -88,6 +88,7 @@ export async function companyLogin(
   const normalizedEmail = email.toLowerCase().trim();
   const user = await prisma.companyUser.findFirst({
     where: { email: normalizedEmail, is_deleted: false },
+    include: { company: { select: { approval_status: true, legal_name: true, trade_name: true } } },
   });
 
   if (!user) {
@@ -144,7 +145,17 @@ export async function companyLogin(
     },
   });
 
-  return issueCompanyTokens(user.id, user.company_id);
+  const tokens = await issueCompanyTokens(user.id, user.company_id);
+  return {
+    ...tokens,
+    company: {
+      id: user.company_id,
+      legalName: user.company.legal_name,
+      tradeName: user.company.trade_name,
+      approvalStatus: user.company.approval_status,
+      canOrder: user.company.approval_status === 'approved',
+    },
+  };
 }
 
 export async function companySendOtp(

@@ -1,5 +1,6 @@
 import { Request, Response } from 'express';
 import * as onboardingService from './onboarding.service';
+import * as authService from '../auth/auth.service';
 import { sendSuccess } from '../../core/utils/response';
 import { BadRequestError, ForbiddenError } from '../../core/errors/AppError';
 import { uploadDocumentFieldsSchema } from './onboarding.schemas';
@@ -7,6 +8,17 @@ import { uploadDocumentFieldsSchema } from './onboarding.schemas';
 export async function registerCompany(req: Request, res: Response): Promise<void> {
   const result = await onboardingService.registerCompany(req.body);
   sendSuccess(res, result, 201);
+}
+
+export async function getOnboardingStatus(req: Request, res: Response): Promise<void> {
+  const profile = await authService.getCompanyProfile(req.actor!.id, req.actor!.companyId!);
+  sendSuccess(res, {
+    approvalStatus: profile.company.approvalStatus,
+    companyStatus: profile.company.status,
+    canOrder: profile.company.approvalStatus === 'approved',
+    company: profile.company,
+    user: profile.user,
+  });
 }
 
 export async function listAddresses(_req: Request, res: Response): Promise<void> {
@@ -53,4 +65,9 @@ export async function uploadDocument(req: Request, res: Response): Promise<void>
   );
 
   sendSuccess(res, result, 201);
+}
+
+export async function listDocuments(_req: Request, res: Response): Promise<void> {
+  const result = await onboardingService.listOnboardingDocuments();
+  sendSuccess(res, result);
 }

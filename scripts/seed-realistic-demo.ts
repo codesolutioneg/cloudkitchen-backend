@@ -12,6 +12,7 @@ import dotenv from 'dotenv';
 import bcrypt from 'bcryptjs';
 import { faker } from '@faker-js/faker';
 import { Prisma } from '@prisma/client';
+import { randomBytes } from 'node:crypto';
 import { prisma } from '../src/prisma/client';
 
 dotenv.config({ path: path.resolve(process.cwd(), '.env') });
@@ -20,7 +21,7 @@ const SEED = Number(process.env.DEMO_SEED ?? Date.now() % 1_000_000);
 faker.seed(SEED);
 faker.setDefaultRefDate(new Date('2026-07-01'));
 
-const CURRENCY = process.env.BUSINESS_DEFAULT_CURRENCY ?? 'SAR';
+const CURRENCY = process.env.BUSINESS_DEFAULT_CURRENCY ?? 'EGP';
 const COMPANY_PASSWORD = 'SecurePass123!';
 const CATEGORY_COUNT = Number(process.env.DEMO_CATEGORIES ?? 8);
 const PRODUCTS_PER_CATEGORY = Number(process.env.DEMO_PRODUCTS_PER_CATEGORY ?? 6);
@@ -169,7 +170,7 @@ async function ensureDefaultPricingList() {
     list = await prisma.productPricingList.create({
       data: {
         id: SEED_PRICING_LIST_ID,
-        name: 'Default SAR',
+        name: 'Default EGP',
         currency: CURRENCY,
         is_default: true,
       },
@@ -573,6 +574,7 @@ async function seedCompaniesAndOrders(
           requested_delivery_at: faker.date.soon({ days: 5 }),
           delivery_address_id: address.id,
           fulfillment_type: faker.helpers.arrayElement(['pickup', 'delivery'] as const),
+          fulfillment_qr_token: randomBytes(24).toString('base64url'),
           source_channel: faker.helpers.arrayElement(['web', 'mobile', 'api']),
           items: { create: items },
           status_history: {

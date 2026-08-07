@@ -28,6 +28,28 @@ export const createOrderSchema = z.object({
   isBulkOrder: z.boolean().optional(),
 });
 
+export const scheduleOrdersSchema = createOrderSchema.omit({ requestedDeliveryAt: true }).extend({
+  dates: z.array(z.string().regex(/^\d{4}-\d{2}-\d{2}$/)).min(1),
+  preferredTime: z.string().regex(/^\d{2}:\d{2}$/).optional(),
+});
+
+export const calendarQuerySchema = z.object({
+  from: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  to: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+});
+
+export const paymentProofSchema = z.object({
+  proofAttachmentId: z.string().uuid(),
+});
+
+export const rejectPaymentSchema = z.object({
+  reason: z.string().optional(),
+});
+
+export const approvePaymentSchema = z.object({
+  comment: z.string().optional(),
+});
+
 export const listOrdersQuerySchema = z.object({
   page: z.coerce.number().int().positive().optional(),
   pageSize: z.coerce.number().int().positive().max(100).optional(),
@@ -54,6 +76,12 @@ export const transitionOrderSchema = z.object({
   toStepId: z.string().uuid(),
   comment: z.string().optional(),
   context: z.record(z.unknown()).optional(),
+});
+
+export const updateDashboardOrderSchema = z.object({
+  requestedDeliveryAt: z.string().datetime().optional(),
+  fulfillmentType: z.enum(['delivery', 'pickup']).optional(),
+  deliveryAddressId: z.string().uuid().nullable().optional(),
 });
 
 export const decideOrderApprovalSchema = z.object({
