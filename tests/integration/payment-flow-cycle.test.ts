@@ -1,8 +1,10 @@
 import { describe, it, expect, beforeAll } from 'vitest';
 import request from 'supertest';
 import app from '../../src/app';
-import { bearer, loginDashboardUser } from '../helpers/auth';
+import { bearer, loginDashboardUser, registerCompany } from '../helpers/auth';
 import { prisma } from '../../src/prisma/client';
+
+const SUFFIX = `pay-${Date.now()}`;
 
 describe('Payment proof cycle', () => {
   let dashToken: string;
@@ -14,9 +16,19 @@ describe('Payment proof cycle', () => {
     const dash = await loginDashboardUser();
     dashToken = dash.body.data.accessToken as string;
 
+    // This suite used to sign in as a real account that only exists on the
+    // production database, so it could never pass anywhere else. It now brings
+    // its own company, like every other suite.
+    const registration = await registerCompany(SUFFIX);
+    const registeredCompanyId = registration.body.data.companyId as string;
+    await request(app)
+      .post(`/api/v1/dashboard/companies/${registeredCompanyId}/approve`)
+      .set(bearer(dashToken))
+      .send({ reason: 'payment flow test' });
+
     const login = await request(app)
       .post('/api/v1/auth/company/login')
-      .send({ email: 'atf343069@gmail.com', password: 'E2eTestPass123!' });
+      .send({ email: `user-${SUFFIX}@example.com`, password: 'SecurePass123!' });
 
     companyToken = login.body.data.accessToken as string;
 
@@ -24,6 +36,38 @@ describe('Payment proof cycle', () => {
       .get('/api/v1/company/profile')
       .set(bearer(companyToken));
     companyId = profile.body.data.company.id as string;
+
+    // A fresh company has no catalog, so give it one it can order from.
+    const category = await request(app)
+      .post('/api/v1/dashboard/catalog/categories')
+      .set(bearer(dashToken))
+      .send({ name: `Pay ${SUFFIX}`, slug: `pay-${SUFFIX}` });
+    const product = await request(app)
+      .post('/api/v1/dashboard/catalog/products')
+      .set(bearer(dashToken))
+      .send({
+        categoryId: category.body.data.id,
+        name: `Pay dish ${SUFFIX}`,
+        basePrice: '600.00',
+        currency: 'EGP',
+        visibility: 'public',
+      });
+    const testMenu = await request(app)
+      .post('/api/v1/dashboard/menus')
+      .set(bearer(dashToken))
+      .send({ name: `Pay menu ${SUFFIX}`, menuType: 'standard', isActive: true });
+    const section = await request(app)
+      .post(`/api/v1/dashboard/menus/${testMenu.body.data.id}/sections`)
+      .set(bearer(dashToken))
+      .send({ name: 'All', sortOrder: 1 });
+    await request(app)
+      .post(`/api/v1/dashboard/menus/${testMenu.body.data.id}/sections/${section.body.data.id}/products`)
+      .set(bearer(dashToken))
+      .send({ productId: product.body.data.id, sortOrder: 1 });
+    await request(app)
+      .post(`/api/v1/dashboard/menus/${testMenu.body.data.id}/assignments`)
+      .set(bearer(dashToken))
+      .send({ scopeType: 'company', scopeId: companyId, priority: 100 });
 
     const menu = await request(app)
       .get('/api/v1/company/catalog/menu')
