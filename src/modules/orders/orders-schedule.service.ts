@@ -82,6 +82,17 @@ export async function getOrderCalendar(query: { from: string; to: string }) {
     include: {
       workflow_instance: { include: { current_step: true } },
       payment: true,
+      // The calendar shows what is actually being eaten that day, not just a total.
+      items: {
+        select: {
+          // The snapshot is the name as ordered, which is what the client should see.
+          product_name_snapshot: true,
+          quantity: true,
+          unit_price_snapshot: true,
+          product: { select: { nutrition: { select: { component_type: true } } } },
+        },
+      },
+      meal_plan: { select: { id: true, name: true } },
     },
     orderBy: { requested_delivery_at: 'asc' },
   });
@@ -108,6 +119,14 @@ export async function getOrderCalendar(query: { from: string; to: string }) {
       paymentStatus,
       color: calendarColor(stepCode, paymentStatus),
       cancellable,
+      mealPlan: o.meal_plan ? { id: o.meal_plan.id, name: o.meal_plan.name } : null,
+      itemCount: o.items.length,
+      items: o.items.map((item) => ({
+        name: item.product_name_snapshot,
+        componentType: item.product?.nutrition?.component_type ?? null,
+        quantity: item.quantity,
+        unitPrice: item.unit_price_snapshot.toString(),
+      })),
     };
   });
 }
