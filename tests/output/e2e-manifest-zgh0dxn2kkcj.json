@@ -1,0 +1,1994 @@
+{
+  "runId": "zgh0dxn2kkcj",
+  "seed": 3444353,
+  "startedAt": "2026-08-07T23:35:14.286Z",
+  "note": "Persisted test data — inspect in Postgres; rows are intentionally not deleted.",
+  "credentials": {
+    "companyUserEmail": "e2e-zgh0dxn2kkcj-user@impossible-jacket.info",
+    "companyPassword": "E2e!HdImB7tbUyOA9",
+    "dashboardEmail": "admin@cloudkitchen.example",
+    "dashboardPassword": "Admin@12345"
+  },
+  "entities": {
+    "dashboardUserId": null,
+    "companyId": "d45727fa-f49e-43fd-87cf-8452c67a6297",
+    "legalName": "Hills and Sons",
+    "approvalStatus": "approved",
+    "categoryId": "fb1cc6d2-2539-4d2e-b64b-c5270360c7e8",
+    "productId": "34b93031-57fb-4e94-b68d-d0043d37fdb1",
+    "pricingListId": "be171ef2-dfd3-4c6c-8adc-6fed5c6eade3",
+    "menuId": "e36c8bd8-4587-4eda-9401-a39b819b24b2",
+    "companyUserId": "77e53109-13c5-473f-b228-9b83e672c8b8",
+    "orderId": "1f13b423-a27a-4ca3-8936-d5b5bc3b3246",
+    "orderNumber": "ORD-20260808-3DA951",
+    "businessRuleId": "9e6d930b-4745-4747-80bb-6491cb27150b",
+    "jobId": "21a177f9-5f88-40f5-86e5-bd350ff44cae",
+    "fileId": "6287c2ed-8dea-4e1d-9752-cfefe9a11d76",
+    "openapiOperationsSwept": 286
+  },
+  "endpointsHit": [
+    {
+      "method": "GET",
+      "path": "/api/v1/health",
+      "status": 200,
+      "at": "2026-08-07T23:35:14.441Z"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/auth/dashboard/login",
+      "status": 200,
+      "at": "2026-08-07T23:35:15.346Z"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/company/onboarding/register",
+      "status": 201,
+      "at": "2026-08-07T23:35:16.780Z"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/dashboard/companies/d45727fa-f49e-43fd-87cf-8452c67a6297/approve",
+      "status": 200,
+      "at": "2026-08-07T23:35:16.997Z"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/dashboard/catalog/categories",
+      "status": 201,
+      "at": "2026-08-07T23:35:17.152Z"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/dashboard/catalog/products",
+      "status": 201,
+      "at": "2026-08-07T23:35:17.245Z"
+    },
+    {
+      "method": "PUT",
+      "path": "/api/v1/dashboard/catalog/products/34b93031-57fb-4e94-b68d-d0043d37fdb1/translations/ar",
+      "status": 200,
+      "at": "2026-08-07T23:35:17.385Z"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/dashboard/catalog/pricing-lists",
+      "status": 201,
+      "at": "2026-08-07T23:35:17.496Z"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/dashboard/catalog/prices",
+      "status": 201,
+      "at": "2026-08-07T23:35:17.574Z"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/dashboard/catalog/company-assignment",
+      "status": 201,
+      "at": "2026-08-07T23:35:17.630Z"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/dashboard/menus",
+      "status": 201,
+      "at": "2026-08-07T23:35:17.700Z"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/dashboard/menus/e36c8bd8-4587-4eda-9401-a39b819b24b2/sections",
+      "status": 201,
+      "at": "2026-08-07T23:35:17.805Z"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/dashboard/menus/e36c8bd8-4587-4eda-9401-a39b819b24b2/sections/bccbd064-8f28-4ece-a1b3-5fcb37dddc44/products",
+      "status": 201,
+      "at": "2026-08-07T23:35:17.972Z"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/dashboard/menus/e36c8bd8-4587-4eda-9401-a39b819b24b2/assignments",
+      "status": 201,
+      "at": "2026-08-07T23:35:18.073Z"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/auth/company/login",
+      "status": 200,
+      "at": "2026-08-07T23:35:19.452Z"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/me/modules",
+      "status": 200,
+      "at": "2026-08-07T23:35:19.665Z"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/company/settings",
+      "status": 200,
+      "at": "2026-08-07T23:35:19.725Z"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/company/catalog/menu",
+      "status": 200,
+      "at": "2026-08-07T23:35:19.945Z"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/company/orders",
+      "status": 201,
+      "at": "2026-08-07T23:35:20.712Z"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/company/orders",
+      "status": 200,
+      "at": "2026-08-07T23:35:20.773Z"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/company/orders/1f13b423-a27a-4ca3-8936-d5b5bc3b3246",
+      "status": 200,
+      "at": "2026-08-07T23:35:20.873Z"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/dashboard/workflows",
+      "status": 200,
+      "at": "2026-08-07T23:35:21.044Z"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/dashboard/workflows/00000000-0000-4000-8000-000000000001/steps",
+      "status": 200,
+      "at": "2026-08-07T23:35:21.104Z"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/dashboard/orders/1f13b423-a27a-4ca3-8936-d5b5bc3b3246/transitions",
+      "status": 400,
+      "at": "2026-08-07T23:35:21.233Z"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/dashboard/rules/rule-types",
+      "status": 201,
+      "at": "2026-08-07T23:35:21.359Z"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/dashboard/rules/business-rules",
+      "status": 201,
+      "at": "2026-08-07T23:35:21.479Z"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/dashboard/rules/business-rules/resolve",
+      "status": 200,
+      "at": "2026-08-07T23:35:21.545Z"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/dashboard/rules/calendars",
+      "status": 201,
+      "at": "2026-08-07T23:35:21.574Z"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/dashboard/rules/calendars/0997c7a3-e6fe-475f-8fe0-85b42a26ad54/events",
+      "status": 201,
+      "at": "2026-08-07T23:35:21.635Z"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/company/device-tokens",
+      "status": 201,
+      "at": "2026-08-07T23:35:21.683Z"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/dashboard/notification-templates",
+      "status": 201,
+      "at": "2026-08-07T23:35:21.730Z"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/company/notifications",
+      "status": 200,
+      "at": "2026-08-07T23:35:21.845Z"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/dashboard/jobs",
+      "status": 200,
+      "at": "2026-08-07T23:35:21.933Z"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/dashboard/integrations/systems",
+      "status": 201,
+      "at": "2026-08-07T23:35:22.018Z"
+    },
+    {
+      "method": "PUT",
+      "path": "/api/v1/dashboard/translations",
+      "status": 200,
+      "at": "2026-08-07T23:35:22.121Z"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/company/languages",
+      "status": 200,
+      "at": "2026-08-07T23:35:22.164Z"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/dashboard/audit-logs",
+      "status": 200,
+      "at": "2026-08-07T23:35:22.243Z"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/files",
+      "status": 201,
+      "at": "2026-08-07T23:35:22.404Z"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/me/navigation",
+      "status": 200,
+      "at": "2026-08-07T23:35:22.474Z"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/dashboard/permissions",
+      "status": 200,
+      "at": "2026-08-07T23:35:22.560Z"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/dashboard/companies",
+      "status": 200,
+      "at": "2026-08-07T23:35:22.696Z"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/health",
+      "status": 200,
+      "at": "2026-08-07T23:35:23.159Z"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/files",
+      "status": 400,
+      "at": "2026-08-07T23:35:23.191Z"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/files/{id}",
+      "status": 404,
+      "at": "2026-08-07T23:35:23.230Z"
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/v1/files/attachments/{attachmentId}",
+      "status": 404,
+      "at": "2026-08-07T23:35:23.301Z"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/auth/company/login",
+      "status": 401,
+      "at": "2026-08-07T23:35:23.362Z"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/auth/company/otp/send",
+      "status": 401,
+      "at": "2026-08-07T23:35:23.385Z"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/auth/company/otp/verify",
+      "status": 400,
+      "at": "2026-08-07T23:35:23.428Z"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/auth/company/refresh",
+      "status": 500,
+      "at": "2026-08-07T23:35:23.461Z"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/auth/company/logout",
+      "status": 401,
+      "at": "2026-08-07T23:35:23.475Z"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/company/profile",
+      "status": 200,
+      "at": "2026-08-07T23:35:23.519Z"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/auth/dashboard/login",
+      "status": 401,
+      "at": "2026-08-07T23:35:23.595Z"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/auth/dashboard/otp/send",
+      "status": 401,
+      "at": "2026-08-07T23:35:23.638Z"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/auth/dashboard/otp/verify",
+      "status": 400,
+      "at": "2026-08-07T23:35:23.670Z"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/auth/dashboard/refresh",
+      "status": 500,
+      "at": "2026-08-07T23:35:23.688Z"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/auth/dashboard/logout",
+      "status": 401,
+      "at": "2026-08-07T23:35:23.706Z"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/auth/dashboard/me",
+      "status": 401,
+      "at": "2026-08-07T23:35:23.725Z"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/company/onboarding/register",
+      "status": 422,
+      "at": "2026-08-07T23:35:23.741Z"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/company/onboarding/addresses",
+      "status": 200,
+      "at": "2026-08-07T23:35:23.773Z"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/company/onboarding/addresses",
+      "status": 422,
+      "at": "2026-08-07T23:35:23.784Z"
+    },
+    {
+      "method": "PATCH",
+      "path": "/api/v1/company/onboarding/addresses/{id}",
+      "status": 404,
+      "at": "2026-08-07T23:35:23.815Z"
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/v1/company/onboarding/addresses/{id}",
+      "status": 404,
+      "at": "2026-08-07T23:35:23.854Z"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/company/onboarding/documents",
+      "status": 200,
+      "at": "2026-08-07T23:35:23.898Z"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/company/onboarding/documents",
+      "status": 201,
+      "at": "2026-08-07T23:35:23.990Z"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/dashboard/companies",
+      "status": 200,
+      "at": "2026-08-07T23:35:24.093Z"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/dashboard/companies/{id}/approve",
+      "status": 404,
+      "at": "2026-08-07T23:35:24.150Z"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/dashboard/companies/{id}/reject",
+      "status": 404,
+      "at": "2026-08-07T23:35:24.181Z"
+    },
+    {
+      "method": "PATCH",
+      "path": "/api/v1/dashboard/companies/{id}/documents/{attachmentId}/verify",
+      "status": 422,
+      "at": "2026-08-07T23:35:24.269Z"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/dashboard/roles",
+      "status": 200,
+      "at": "2026-08-07T23:35:24.379Z"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/dashboard/roles",
+      "status": 422,
+      "at": "2026-08-07T23:35:24.517Z"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/dashboard/roles/{id}",
+      "status": 404,
+      "at": "2026-08-07T23:35:24.616Z"
+    },
+    {
+      "method": "PATCH",
+      "path": "/api/v1/dashboard/roles/{id}",
+      "status": 404,
+      "at": "2026-08-07T23:35:24.778Z"
+    },
+    {
+      "method": "PUT",
+      "path": "/api/v1/dashboard/roles/{id}/permissions",
+      "status": 422,
+      "at": "2026-08-07T23:35:24.830Z"
+    },
+    {
+      "method": "PUT",
+      "path": "/api/v1/dashboard/roles/{id}/page-permissions",
+      "status": 422,
+      "at": "2026-08-07T23:35:24.865Z"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/dashboard/users",
+      "status": 200,
+      "at": "2026-08-07T23:35:24.966Z"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/dashboard/users",
+      "status": 422,
+      "at": "2026-08-07T23:35:25.089Z"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/dashboard/users/{id}/roles",
+      "status": 422,
+      "at": "2026-08-07T23:35:25.193Z"
+    },
+    {
+      "method": "PUT",
+      "path": "/api/v1/dashboard/users/{id}/company-scope",
+      "status": 422,
+      "at": "2026-08-07T23:35:25.233Z"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/dashboard/companies/{id}/users",
+      "status": 404,
+      "at": "2026-08-07T23:35:25.298Z"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/dashboard/features",
+      "status": 200,
+      "at": "2026-08-07T23:35:25.425Z"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/dashboard/features",
+      "status": 422,
+      "at": "2026-08-07T23:35:25.506Z"
+    },
+    {
+      "method": "PATCH",
+      "path": "/api/v1/dashboard/features/{id}",
+      "status": 404,
+      "at": "2026-08-07T23:35:25.609Z"
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/v1/dashboard/features/{id}",
+      "status": 404,
+      "at": "2026-08-07T23:35:25.681Z"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/dashboard/feature-groups",
+      "status": 200,
+      "at": "2026-08-07T23:35:25.718Z"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/dashboard/feature-groups",
+      "status": 422,
+      "at": "2026-08-07T23:35:25.752Z"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/dashboard/modules",
+      "status": 200,
+      "at": "2026-08-07T23:35:25.801Z"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/dashboard/modules",
+      "status": 422,
+      "at": "2026-08-07T23:35:25.861Z"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/dashboard/companies/{companyId}/features",
+      "status": 200,
+      "at": "2026-08-07T23:35:25.910Z"
+    },
+    {
+      "method": "PUT",
+      "path": "/api/v1/dashboard/companies/{companyId}/features",
+      "status": 422,
+      "at": "2026-08-07T23:35:25.928Z"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/dashboard/companies/{companyId}/modules",
+      "status": 200,
+      "at": "2026-08-07T23:35:25.994Z"
+    },
+    {
+      "method": "PUT",
+      "path": "/api/v1/dashboard/companies/{companyId}/modules",
+      "status": 422,
+      "at": "2026-08-07T23:35:26.084Z"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/dashboard/feature-flags",
+      "status": 200,
+      "at": "2026-08-07T23:35:26.145Z"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/dashboard/feature-flags",
+      "status": 422,
+      "at": "2026-08-07T23:35:26.179Z"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/dashboard/dashboard-pages",
+      "status": 200,
+      "at": "2026-08-07T23:35:26.217Z"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/dashboard/dashboard-pages",
+      "status": 422,
+      "at": "2026-08-07T23:35:26.277Z"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/dashboard/roles/{roleId}/modules",
+      "status": 404,
+      "at": "2026-08-07T23:35:26.340Z"
+    },
+    {
+      "method": "PUT",
+      "path": "/api/v1/dashboard/roles/{roleId}/modules",
+      "status": 422,
+      "at": "2026-08-07T23:35:26.423Z"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/dashboard/roles/{roleId}/features",
+      "status": 404,
+      "at": "2026-08-07T23:35:26.482Z"
+    },
+    {
+      "method": "PUT",
+      "path": "/api/v1/dashboard/roles/{roleId}/features",
+      "status": 422,
+      "at": "2026-08-07T23:35:26.526Z"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/me/modules",
+      "status": 200,
+      "at": "2026-08-07T23:35:26.554Z"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/me/navigation",
+      "status": 200,
+      "at": "2026-08-07T23:35:26.650Z"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/company/catalog/menu",
+      "status": 200,
+      "at": "2026-08-07T23:35:26.862Z"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/dashboard/catalog/categories",
+      "status": 200,
+      "at": "2026-08-07T23:35:26.907Z"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/dashboard/catalog/categories",
+      "status": 422,
+      "at": "2026-08-07T23:35:26.948Z"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/dashboard/catalog/products",
+      "status": 200,
+      "at": "2026-08-07T23:35:27.054Z"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/dashboard/catalog/products",
+      "status": 422,
+      "at": "2026-08-07T23:35:27.099Z"
+    },
+    {
+      "method": "PUT",
+      "path": "/api/v1/dashboard/catalog/products/{id}/translations/{lang}",
+      "status": 422,
+      "at": "2026-08-07T23:35:27.123Z"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/dashboard/catalog/pricing-lists",
+      "status": 200,
+      "at": "2026-08-07T23:35:27.172Z"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/dashboard/catalog/pricing-lists",
+      "status": 422,
+      "at": "2026-08-07T23:35:27.191Z"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/dashboard/catalog/prices",
+      "status": 422,
+      "at": "2026-08-07T23:35:27.236Z"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/dashboard/catalog/company-assignment",
+      "status": 422,
+      "at": "2026-08-07T23:35:27.281Z"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/dashboard/catalog/products/{id}/nutrition",
+      "status": 200,
+      "at": "2026-08-07T23:35:27.340Z"
+    },
+    {
+      "method": "PUT",
+      "path": "/api/v1/dashboard/catalog/products/{id}/nutrition",
+      "status": 422,
+      "at": "2026-08-07T23:35:27.425Z"
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/v1/dashboard/catalog/products/{id}/nutrition",
+      "status": 204,
+      "at": "2026-08-07T23:35:27.537Z"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/dashboard/menus",
+      "status": 200,
+      "at": "2026-08-07T23:35:27.597Z"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/dashboard/menus",
+      "status": 422,
+      "at": "2026-08-07T23:35:27.627Z"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/dashboard/menus/{id}/sections",
+      "status": 404,
+      "at": "2026-08-07T23:35:27.659Z"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/dashboard/menus/{id}/sections",
+      "status": 422,
+      "at": "2026-08-07T23:35:27.676Z"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/dashboard/menus/{id}/sections/{sectionId}/products",
+      "status": 404,
+      "at": "2026-08-07T23:35:27.715Z"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/dashboard/menus/{id}/sections/{sectionId}/products",
+      "status": 422,
+      "at": "2026-08-07T23:35:27.765Z"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/dashboard/menus/{id}/assignments",
+      "status": 404,
+      "at": "2026-08-07T23:35:27.825Z"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/dashboard/menus/{id}/assignments",
+      "status": 422,
+      "at": "2026-08-07T23:35:27.840Z"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/dashboard/rules/rule-types",
+      "status": 200,
+      "at": "2026-08-07T23:35:27.868Z"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/dashboard/rules/rule-types",
+      "status": 422,
+      "at": "2026-08-07T23:35:27.881Z"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/dashboard/rules/business-rules/resolve",
+      "status": 422,
+      "at": "2026-08-07T23:35:27.910Z"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/dashboard/rules/calendars",
+      "status": 200,
+      "at": "2026-08-07T23:35:27.948Z"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/dashboard/rules/calendars",
+      "status": 422,
+      "at": "2026-08-07T23:35:27.990Z"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/company/settings",
+      "status": 200,
+      "at": "2026-08-07T23:35:28.017Z"
+    },
+    {
+      "method": "PUT",
+      "path": "/api/v1/company/settings",
+      "status": 200,
+      "at": "2026-08-07T23:35:28.063Z"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/dashboard/settings/global",
+      "status": 200,
+      "at": "2026-08-07T23:35:28.118Z"
+    },
+    {
+      "method": "PUT",
+      "path": "/api/v1/dashboard/settings/global",
+      "status": 200,
+      "at": "2026-08-07T23:35:28.160Z"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/dashboard/settings/company/{companyId}",
+      "status": 200,
+      "at": "2026-08-07T23:35:28.223Z"
+    },
+    {
+      "method": "PUT",
+      "path": "/api/v1/dashboard/settings/company/{companyId}",
+      "status": 200,
+      "at": "2026-08-07T23:35:28.299Z"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/dashboard/workflows",
+      "status": 200,
+      "at": "2026-08-07T23:35:28.365Z"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/dashboard/workflows",
+      "status": 422,
+      "at": "2026-08-07T23:35:28.429Z"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/dashboard/workflow-instances",
+      "status": 200,
+      "at": "2026-08-07T23:35:28.547Z"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/dashboard/workflow-instances",
+      "status": 422,
+      "at": "2026-08-07T23:35:28.589Z"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/dashboard/workflow-instances/{id}/transition",
+      "status": 422,
+      "at": "2026-08-07T23:35:28.709Z"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/company/orders",
+      "status": 200,
+      "at": "2026-08-07T23:35:28.781Z"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/company/orders",
+      "status": 422,
+      "at": "2026-08-07T23:35:28.829Z"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/company/orders/{id}",
+      "status": 404,
+      "at": "2026-08-07T23:35:28.878Z"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/company/orders/{id}/cancel",
+      "status": 404,
+      "at": "2026-08-07T23:35:28.907Z"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/company/orders/{id}/tracking",
+      "status": 404,
+      "at": "2026-08-07T23:35:28.951Z"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/company/orders/{id}/notes",
+      "status": 422,
+      "at": "2026-08-07T23:35:28.980Z"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/company/orders/{id}/approvals/{level}/decide",
+      "status": 422,
+      "at": "2026-08-07T23:35:29.005Z"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/dashboard/orders",
+      "status": 200,
+      "at": "2026-08-07T23:35:29.116Z"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/dashboard/orders/{id}",
+      "status": 404,
+      "at": "2026-08-07T23:35:29.165Z"
+    },
+    {
+      "method": "PATCH",
+      "path": "/api/v1/dashboard/orders/{id}",
+      "status": 404,
+      "at": "2026-08-07T23:35:29.215Z"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/dashboard/orders/{id}/transitions",
+      "status": 422,
+      "at": "2026-08-07T23:35:29.255Z"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/dashboard/orders/{id}/notes",
+      "status": 422,
+      "at": "2026-08-07T23:35:29.282Z"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/dashboard/orders/{id}/approvals/{level}/decide",
+      "status": 422,
+      "at": "2026-08-07T23:35:29.310Z"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/dashboard/approval-workflows",
+      "status": 200,
+      "at": "2026-08-07T23:35:29.354Z"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/dashboard/approval-workflows",
+      "status": 422,
+      "at": "2026-08-07T23:35:29.401Z"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/dashboard/approval-workflows/{id}",
+      "status": 404,
+      "at": "2026-08-07T23:35:29.453Z"
+    },
+    {
+      "method": "PATCH",
+      "path": "/api/v1/dashboard/approval-workflows/{id}",
+      "status": 404,
+      "at": "2026-08-07T23:35:29.504Z"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/dashboard/approval-workflows/{id}/steps",
+      "status": 404,
+      "at": "2026-08-07T23:35:29.538Z"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/dashboard/approval-workflows/{id}/steps",
+      "status": 422,
+      "at": "2026-08-07T23:35:29.599Z"
+    },
+    {
+      "method": "PATCH",
+      "path": "/api/v1/dashboard/approval-workflows/{id}/steps/{stepId}",
+      "status": 404,
+      "at": "2026-08-07T23:35:29.654Z"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/dashboard/approval-requests",
+      "status": 200,
+      "at": "2026-08-07T23:35:29.686Z"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/dashboard/approval-requests/{id}",
+      "status": 404,
+      "at": "2026-08-07T23:35:29.710Z"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/dashboard/approval-requests/{id}/decide",
+      "status": 422,
+      "at": "2026-08-07T23:35:29.743Z"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/dashboard/audit-logs",
+      "status": 200,
+      "at": "2026-08-07T23:35:29.798Z"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/company/notifications",
+      "status": 200,
+      "at": "2026-08-07T23:35:29.821Z"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/company/notifications/{id}/read",
+      "status": 404,
+      "at": "2026-08-07T23:35:29.843Z"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/company/device-tokens",
+      "status": 422,
+      "at": "2026-08-07T23:35:29.851Z"
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/v1/company/device-tokens/{id}",
+      "status": 404,
+      "at": "2026-08-07T23:35:29.891Z"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/dashboard/notification-templates",
+      "status": 200,
+      "at": "2026-08-07T23:35:29.945Z"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/dashboard/notification-templates",
+      "status": 422,
+      "at": "2026-08-07T23:35:29.982Z"
+    },
+    {
+      "method": "PATCH",
+      "path": "/api/v1/dashboard/notification-templates/{id}",
+      "status": 404,
+      "at": "2026-08-07T23:35:30.044Z"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/dashboard/jobs",
+      "status": 200,
+      "at": "2026-08-07T23:35:30.116Z"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/dashboard/jobs/{id}",
+      "status": 404,
+      "at": "2026-08-07T23:35:30.170Z"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/dashboard/jobs/{id}/retry",
+      "status": 404,
+      "at": "2026-08-07T23:35:30.238Z"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/dashboard/jobs/{id}/cancel",
+      "status": 404,
+      "at": "2026-08-07T23:35:30.293Z"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/dashboard/integrations/systems",
+      "status": 200,
+      "at": "2026-08-07T23:35:30.365Z"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/dashboard/integrations/systems",
+      "status": 422,
+      "at": "2026-08-07T23:35:30.406Z"
+    },
+    {
+      "method": "PATCH",
+      "path": "/api/v1/dashboard/integrations/systems/{id}",
+      "status": 404,
+      "at": "2026-08-07T23:35:30.460Z"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/dashboard/integrations/systems/{id}/mappings",
+      "status": 404,
+      "at": "2026-08-07T23:35:30.484Z"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/dashboard/integrations/events",
+      "status": 200,
+      "at": "2026-08-07T23:35:30.517Z"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/dashboard/languages",
+      "status": 200,
+      "at": "2026-08-07T23:35:30.567Z"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/dashboard/languages",
+      "status": 422,
+      "at": "2026-08-07T23:35:30.614Z"
+    },
+    {
+      "method": "PATCH",
+      "path": "/api/v1/dashboard/languages/{code}",
+      "status": 422,
+      "at": "2026-08-07T23:35:30.633Z"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/dashboard/translations",
+      "status": 200,
+      "at": "2026-08-07T23:35:30.674Z"
+    },
+    {
+      "method": "PUT",
+      "path": "/api/v1/dashboard/translations",
+      "status": 422,
+      "at": "2026-08-07T23:35:30.720Z"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/company/languages",
+      "status": 200,
+      "at": "2026-08-07T23:35:30.772Z"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/company/orders/{id}/fulfillment-qr",
+      "status": 404,
+      "at": "2026-08-07T23:35:30.825Z"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/dashboard/delivery/orders",
+      "status": 200,
+      "at": "2026-08-07T23:35:30.886Z"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/dashboard/delivery/users",
+      "status": 200,
+      "at": "2026-08-07T23:35:31.050Z"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/dashboard/orders/{id}/assign-delivery",
+      "status": 422,
+      "at": "2026-08-07T23:35:31.115Z"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/dashboard/delivery/orders/{id}/depart",
+      "status": 400,
+      "at": "2026-08-07T23:35:31.219Z"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/dashboard/delivery/orders/{id}/confirm-delivery",
+      "status": 422,
+      "at": "2026-08-07T23:35:31.264Z"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/dashboard/orders/{id}/awaiting-pickup",
+      "status": 400,
+      "at": "2026-08-07T23:35:31.343Z"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/dashboard/orders/{id}/confirm-pickup",
+      "status": 400,
+      "at": "2026-08-07T23:35:31.370Z"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/dashboard/meal-plans",
+      "status": 200,
+      "at": "2026-08-07T23:35:31.463Z"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/dashboard/meal-plans",
+      "status": 422,
+      "at": "2026-08-07T23:35:31.538Z"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/dashboard/meal-plans/candidates",
+      "status": 422,
+      "at": "2026-08-07T23:35:31.564Z"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/dashboard/meal-plans/preview",
+      "status": 422,
+      "at": "2026-08-07T23:35:31.590Z"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/dashboard/meal-plans/{id}",
+      "status": 404,
+      "at": "2026-08-07T23:35:31.620Z"
+    },
+    {
+      "method": "PATCH",
+      "path": "/api/v1/dashboard/meal-plans/{id}",
+      "status": 404,
+      "at": "2026-08-07T23:35:31.705Z"
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/v1/dashboard/meal-plans/{id}",
+      "status": 404,
+      "at": "2026-08-07T23:35:31.759Z"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/dashboard/meal-plans/{id}/generate",
+      "status": 404,
+      "at": "2026-08-07T23:35:31.790Z"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/dashboard/meal-plans/{id}/approve",
+      "status": 404,
+      "at": "2026-08-07T23:35:31.872Z"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/dashboard/meal-plans/{id}/duplicate",
+      "status": 404,
+      "at": "2026-08-07T23:35:31.914Z"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/dashboard/meal-plans/{id}/days/{dayId}/items",
+      "status": 422,
+      "at": "2026-08-07T23:35:31.952Z"
+    },
+    {
+      "method": "PATCH",
+      "path": "/api/v1/dashboard/meal-plans/{id}/days/{dayId}/items/{itemId}",
+      "status": 404,
+      "at": "2026-08-07T23:35:32.005Z"
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/v1/dashboard/meal-plans/{id}/days/{dayId}/items/{itemId}",
+      "status": 404,
+      "at": "2026-08-07T23:35:32.082Z"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/company/meal-plans",
+      "status": 200,
+      "at": "2026-08-07T23:35:32.121Z"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/company/meal-plans",
+      "status": 422,
+      "at": "2026-08-07T23:35:32.155Z"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/company/meal-plans/{id}",
+      "status": 404,
+      "at": "2026-08-07T23:35:32.171Z"
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/v1/company/meal-plans/{id}",
+      "status": 404,
+      "at": "2026-08-07T23:35:32.209Z"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/company/meal-plans/{id}/days/{dayId}/items/{itemId}/options",
+      "status": 404,
+      "at": "2026-08-07T23:35:32.242Z"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/company/meal-plans/{id}/days/{dayId}/items/{itemId}/swap",
+      "status": 422,
+      "at": "2026-08-07T23:35:32.269Z"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/company/meal-plans/{id}/confirm",
+      "status": 422,
+      "at": "2026-08-07T23:35:32.309Z"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/company/meal-plans/preview",
+      "status": 422,
+      "at": "2026-08-07T23:35:32.360Z"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/company/meal-plans/components",
+      "status": 200,
+      "at": "2026-08-07T23:35:32.427Z"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/dashboard/meal-plans/{id}/margin",
+      "status": 404,
+      "at": "2026-08-07T23:35:32.477Z"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/dashboard/companies/{companyId}/billing-terms",
+      "status": 200,
+      "at": "2026-08-07T23:35:32.574Z"
+    },
+    {
+      "method": "PUT",
+      "path": "/api/v1/dashboard/companies/{companyId}/billing-terms",
+      "status": 422,
+      "at": "2026-08-07T23:35:32.638Z"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/dashboard/companies/{companyId}/invoices",
+      "status": 422,
+      "at": "2026-08-07T23:35:32.657Z"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/dashboard/invoices",
+      "status": 200,
+      "at": "2026-08-07T23:35:32.694Z"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/dashboard/invoices/{id}",
+      "status": 404,
+      "at": "2026-08-07T23:35:32.739Z"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/dashboard/invoices/{id}/payments",
+      "status": 422,
+      "at": "2026-08-07T23:35:32.776Z"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/dashboard/meal-plans/{id}/instalments",
+      "status": 422,
+      "at": "2026-08-07T23:35:32.821Z"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/dashboard/instalments/{instalmentId}/decide",
+      "status": 422,
+      "at": "2026-08-07T23:35:32.849Z"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/dashboard/billing/mark-overdue",
+      "status": 200,
+      "at": "2026-08-07T23:35:32.922Z"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/company/billing/summary",
+      "status": 200,
+      "at": "2026-08-07T23:35:32.985Z"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/company/billing/terms",
+      "status": 200,
+      "at": "2026-08-07T23:35:33.016Z"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/company/invoices",
+      "status": 200,
+      "at": "2026-08-07T23:35:33.044Z"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/company/invoices/{id}",
+      "status": 404,
+      "at": "2026-08-07T23:35:33.072Z"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/company/instalments/{instalmentId}/proof",
+      "status": 422,
+      "at": "2026-08-07T23:35:33.107Z"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/dashboard/costing/suppliers",
+      "status": 200,
+      "at": "2026-08-07T23:35:33.169Z"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/dashboard/costing/suppliers",
+      "status": 422,
+      "at": "2026-08-07T23:35:33.202Z"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/dashboard/costing/ingredients",
+      "status": 200,
+      "at": "2026-08-07T23:35:33.236Z"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/dashboard/costing/ingredients",
+      "status": 422,
+      "at": "2026-08-07T23:35:33.259Z"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/dashboard/costing/ingredients/{id}",
+      "status": 404,
+      "at": "2026-08-07T23:35:33.286Z"
+    },
+    {
+      "method": "PATCH",
+      "path": "/api/v1/dashboard/costing/ingredients/{id}",
+      "status": 404,
+      "at": "2026-08-07T23:35:33.317Z"
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/v1/dashboard/costing/ingredients/{id}",
+      "status": 404,
+      "at": "2026-08-07T23:35:33.368Z"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/dashboard/costing/ingredients/{id}/history",
+      "status": 200,
+      "at": "2026-08-07T23:35:33.424Z"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/dashboard/costing/ingredients/bulk-price",
+      "status": 422,
+      "at": "2026-08-07T23:35:33.470Z"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/dashboard/costing/recipes",
+      "status": 200,
+      "at": "2026-08-07T23:35:33.502Z"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/dashboard/costing/recipes",
+      "status": 422,
+      "at": "2026-08-07T23:35:33.516Z"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/dashboard/costing/recipes/{id}",
+      "status": 404,
+      "at": "2026-08-07T23:35:33.537Z"
+    },
+    {
+      "method": "PUT",
+      "path": "/api/v1/dashboard/costing/recipes/{id}/lines",
+      "status": 422,
+      "at": "2026-08-07T23:35:33.577Z"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/dashboard/costing/recipes/{id}/status",
+      "status": 422,
+      "at": "2026-08-07T23:35:33.621Z"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/dashboard/costing/products",
+      "status": 200,
+      "at": "2026-08-07T23:35:33.688Z"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/dashboard/costing/summary",
+      "status": 200,
+      "at": "2026-08-07T23:35:33.738Z"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/dashboard/costing/products/{id}/manual-cost",
+      "status": 422,
+      "at": "2026-08-07T23:35:33.747Z"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/dashboard/costing/recost",
+      "status": 200,
+      "at": "2026-08-07T23:35:33.794Z"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/dashboard/permissions",
+      "status": 200,
+      "at": "2026-08-07T23:35:33.822Z"
+    },
+    {
+      "method": "PATCH",
+      "path": "/api/v1/dashboard/rules/rule-types/{id}",
+      "status": 404,
+      "at": "2026-08-07T23:35:33.870Z"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/dashboard/rules/business-rules",
+      "status": 200,
+      "at": "2026-08-07T23:35:33.892Z"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/dashboard/rules/business-rules",
+      "status": 422,
+      "at": "2026-08-07T23:35:33.933Z"
+    },
+    {
+      "method": "PATCH",
+      "path": "/api/v1/dashboard/rules/business-rules/{id}",
+      "status": 404,
+      "at": "2026-08-07T23:35:33.959Z"
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/v1/dashboard/rules/business-rules/{id}",
+      "status": 404,
+      "at": "2026-08-07T23:35:34.007Z"
+    },
+    {
+      "method": "PATCH",
+      "path": "/api/v1/dashboard/rules/calendars/{id}",
+      "status": 404,
+      "at": "2026-08-07T23:35:34.028Z"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/dashboard/rules/calendars/{id}/events",
+      "status": 404,
+      "at": "2026-08-07T23:35:34.042Z"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/dashboard/rules/calendars/{id}/events",
+      "status": 422,
+      "at": "2026-08-07T23:35:34.055Z"
+    },
+    {
+      "method": "PATCH",
+      "path": "/api/v1/dashboard/rules/calendars/{id}/events/{eventId}",
+      "status": 404,
+      "at": "2026-08-07T23:35:34.074Z"
+    },
+    {
+      "method": "PATCH",
+      "path": "/api/v1/dashboard/catalog/categories/{id}",
+      "status": 404,
+      "at": "2026-08-07T23:35:34.100Z"
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/v1/dashboard/catalog/categories/{id}",
+      "status": 404,
+      "at": "2026-08-07T23:35:34.115Z"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/dashboard/catalog/products/{id}",
+      "status": 200,
+      "at": "2026-08-07T23:35:34.134Z"
+    },
+    {
+      "method": "PATCH",
+      "path": "/api/v1/dashboard/catalog/products/{id}",
+      "status": 200,
+      "at": "2026-08-07T23:35:34.191Z"
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/v1/dashboard/catalog/products/{id}",
+      "status": 204,
+      "at": "2026-08-07T23:35:34.232Z"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/dashboard/catalog/products/{id}/variants",
+      "status": 404,
+      "at": "2026-08-07T23:35:34.245Z"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/dashboard/catalog/products/{id}/variants",
+      "status": 422,
+      "at": "2026-08-07T23:35:34.258Z"
+    },
+    {
+      "method": "PATCH",
+      "path": "/api/v1/dashboard/catalog/products/{id}/variants/{variantId}",
+      "status": 404,
+      "at": "2026-08-07T23:35:34.281Z"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/dashboard/catalog/products/{id}/option-groups",
+      "status": 404,
+      "at": "2026-08-07T23:35:34.306Z"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/dashboard/catalog/products/{id}/option-groups",
+      "status": 422,
+      "at": "2026-08-07T23:35:34.316Z"
+    },
+    {
+      "method": "PATCH",
+      "path": "/api/v1/dashboard/catalog/products/{id}/option-groups/{groupId}",
+      "status": 404,
+      "at": "2026-08-07T23:35:34.343Z"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/dashboard/catalog/products/{id}/availability",
+      "status": 404,
+      "at": "2026-08-07T23:35:34.360Z"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/dashboard/catalog/products/{id}/availability",
+      "status": 404,
+      "at": "2026-08-07T23:35:34.373Z"
+    },
+    {
+      "method": "PATCH",
+      "path": "/api/v1/dashboard/catalog/products/{id}/availability/{availabilityId}",
+      "status": 404,
+      "at": "2026-08-07T23:35:34.392Z"
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/v1/dashboard/catalog/products/{id}/availability/{availabilityId}",
+      "status": 404,
+      "at": "2026-08-07T23:35:34.419Z"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/dashboard/catalog/products/{id}/tags",
+      "status": 404,
+      "at": "2026-08-07T23:35:34.464Z"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/dashboard/catalog/products/{id}/tags",
+      "status": 422,
+      "at": "2026-08-07T23:35:34.491Z"
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/v1/dashboard/catalog/products/{id}/tags/{tagId}",
+      "status": 204,
+      "at": "2026-08-07T23:35:34.515Z"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/dashboard/menus/{id}",
+      "status": 404,
+      "at": "2026-08-07T23:35:34.538Z"
+    },
+    {
+      "method": "PATCH",
+      "path": "/api/v1/dashboard/menus/{id}",
+      "status": 404,
+      "at": "2026-08-07T23:35:34.583Z"
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/v1/dashboard/menus/{id}",
+      "status": 404,
+      "at": "2026-08-07T23:35:34.623Z"
+    },
+    {
+      "method": "PATCH",
+      "path": "/api/v1/dashboard/menus/{id}/sections/{sectionId}",
+      "status": 404,
+      "at": "2026-08-07T23:35:34.671Z"
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/v1/dashboard/menus/{id}/sections/{sectionId}",
+      "status": 404,
+      "at": "2026-08-07T23:35:34.715Z"
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/v1/dashboard/menus/{id}/sections/{sectionId}/products/{productId}",
+      "status": 404,
+      "at": "2026-08-07T23:35:34.754Z"
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/v1/dashboard/menus/{id}/assignments/{assignmentId}",
+      "status": 404,
+      "at": "2026-08-07T23:35:34.792Z"
+    },
+    {
+      "method": "PATCH",
+      "path": "/api/v1/dashboard/workflows/{id}",
+      "status": 404,
+      "at": "2026-08-07T23:35:34.850Z"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/dashboard/workflows/{id}/steps",
+      "status": 404,
+      "at": "2026-08-07T23:35:34.899Z"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/dashboard/workflows/{id}/steps",
+      "status": 422,
+      "at": "2026-08-07T23:35:34.939Z"
+    },
+    {
+      "method": "PATCH",
+      "path": "/api/v1/dashboard/workflows/{id}/steps/{stepId}",
+      "status": 404,
+      "at": "2026-08-07T23:35:34.991Z"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/dashboard/workflows/{id}/transitions",
+      "status": 404,
+      "at": "2026-08-07T23:35:35.034Z"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/dashboard/workflows/{id}/transitions",
+      "status": 422,
+      "at": "2026-08-07T23:35:35.068Z"
+    },
+    {
+      "method": "PATCH",
+      "path": "/api/v1/dashboard/workflows/{id}/transitions/{transitionId}",
+      "status": 404,
+      "at": "2026-08-07T23:35:35.109Z"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/dashboard/workflows/steps/{id}/actions",
+      "status": 422,
+      "at": "2026-08-07T23:35:35.167Z"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/dashboard/workflows/transitions/{id}/conditions",
+      "status": 422,
+      "at": "2026-08-07T23:35:35.213Z"
+    },
+    {
+      "method": "PATCH",
+      "path": "/api/v1/dashboard/feature-groups/{id}",
+      "status": 404,
+      "at": "2026-08-07T23:35:35.246Z"
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/v1/dashboard/feature-groups/{id}",
+      "status": 404,
+      "at": "2026-08-07T23:35:35.308Z"
+    },
+    {
+      "method": "PATCH",
+      "path": "/api/v1/dashboard/modules/{id}",
+      "status": 404,
+      "at": "2026-08-07T23:35:35.416Z"
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/v1/dashboard/modules/{id}",
+      "status": 404,
+      "at": "2026-08-07T23:35:35.452Z"
+    },
+    {
+      "method": "PATCH",
+      "path": "/api/v1/dashboard/feature-flags/{id}",
+      "status": 404,
+      "at": "2026-08-07T23:35:35.486Z"
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/v1/dashboard/feature-flags/{id}",
+      "status": 404,
+      "at": "2026-08-07T23:35:35.548Z"
+    },
+    {
+      "method": "PATCH",
+      "path": "/api/v1/dashboard/dashboard-pages/{id}",
+      "status": 404,
+      "at": "2026-08-07T23:35:35.575Z"
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/v1/dashboard/dashboard-pages/{id}",
+      "status": 404,
+      "at": "2026-08-07T23:35:35.608Z"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/dashboard/catalog/products/{id}/media",
+      "status": 404,
+      "at": "2026-08-07T23:35:35.668Z"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/dashboard/catalog/products/{id}/image",
+      "status": 400,
+      "at": "2026-08-07T23:35:35.729Z"
+    },
+    {
+      "method": "PUT",
+      "path": "/api/v1/dashboard/catalog/products/{id}/image",
+      "status": 422,
+      "at": "2026-08-07T23:35:35.761Z"
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/v1/dashboard/catalog/products/{id}/media/{mediaId}",
+      "status": 404,
+      "at": "2026-08-07T23:35:35.810Z"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/dashboard/companies/{id}",
+      "status": 404,
+      "at": "2026-08-07T23:35:35.858Z"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/dashboard/companies/{id}/documents",
+      "status": 404,
+      "at": "2026-08-07T23:35:35.893Z"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/company/catalog/custom-products",
+      "status": 200,
+      "at": "2026-08-07T23:35:35.946Z"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/company/catalog/custom-products",
+      "status": 422,
+      "at": "2026-08-07T23:35:35.964Z"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/company/onboarding/status",
+      "status": 200,
+      "at": "2026-08-07T23:35:36.027Z"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/company/orders/calendar",
+      "status": 422,
+      "at": "2026-08-07T23:35:36.069Z"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/company/orders/schedule",
+      "status": 422,
+      "at": "2026-08-07T23:35:36.124Z"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/company/orders/{id}/payment",
+      "status": 404,
+      "at": "2026-08-07T23:35:36.160Z"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/company/orders/{id}/payment-proof",
+      "status": 422,
+      "at": "2026-08-07T23:35:36.176Z"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/company/orders/{id}/receipt",
+      "status": 404,
+      "at": "2026-08-07T23:35:36.247Z"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/dashboard/catalog/custom-products",
+      "status": 200,
+      "at": "2026-08-07T23:35:36.335Z"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/dashboard/catalog/custom-products/{id}/approve",
+      "status": 422,
+      "at": "2026-08-07T23:35:36.357Z"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/dashboard/catalog/custom-products/{id}/reject",
+      "status": 422,
+      "at": "2026-08-07T23:35:36.381Z"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/dashboard/catalog/company-assignments",
+      "status": 200,
+      "at": "2026-08-07T23:35:36.564Z"
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/v1/dashboard/catalog/company-assignment/{id}",
+      "status": 404,
+      "at": "2026-08-07T23:35:36.601Z"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/dashboard/menus/{id}/set-general",
+      "status": 404,
+      "at": "2026-08-07T23:35:36.632Z"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/dashboard/orders/{id}/payment",
+      "status": 404,
+      "at": "2026-08-07T23:35:36.689Z"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/dashboard/orders/{id}/payment/approve",
+      "status": 404,
+      "at": "2026-08-07T23:35:36.737Z"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/dashboard/orders/{id}/payment/reject",
+      "status": 404,
+      "at": "2026-08-07T23:35:36.775Z"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/dashboard/orders/{id}/receipt",
+      "status": 404,
+      "at": "2026-08-07T23:35:36.809Z"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/dashboard/orders/{id}/fulfillment-qr",
+      "status": 404,
+      "at": "2026-08-07T23:35:36.857Z"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/dashboard/analytics/overview",
+      "status": 200,
+      "at": "2026-08-07T23:35:37.129Z"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/dashboard/assistant/chat",
+      "status": 422,
+      "at": "2026-08-07T23:35:37.169Z"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/public/catalog/menu",
+      "status": 200,
+      "at": "2026-08-07T23:35:37.227Z"
+    }
+  ],
+  "finishedAt": "2026-08-07T23:35:37.242Z"
+}

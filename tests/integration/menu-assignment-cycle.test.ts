@@ -1,28 +1,37 @@
 import { describe, it, expect, beforeAll } from 'vitest';
 import request from 'supertest';
 import app from '../../src/app';
-import { bearer, loginDashboardUser } from '../helpers/auth';
+import { bearer, loginCompanyUser, loginDashboardUser, registerCompany } from '../helpers/auth';
+import { COMPANY_USER_PASSWORD, SEED_MENU_ID } from '../helpers/orderFixtures';
 
-const NILE_COMPANY_ID = 'f94250b0-8ae6-4189-ae1a-4004ce7a1a1e';
-const CENTRAL_MENU_ID = 'b6793148-95d5-4335-a57c-a06f4a186877';
 
 describe('Menu assignment cycle', () => {
   let dashToken: string;
   let assignmentId: string;
+  let companyId: string;
+  let companyToken: string;
 
   beforeAll(async () => {
     const dash = await loginDashboardUser();
     dashToken = dash.body.data.accessToken as string;
+
+    // This suite used to point at a company and menu that exist in no seed, so
+    // it could never pass. It now brings its own company and uses the seeded menu.
+    const suffix = `assign-${Date.now()}`;
+    const reg = await registerCompany(suffix);
+    companyId = reg.body.data.companyId as string;
+    const login = await loginCompanyUser(`user-${suffix}@example.com`, COMPANY_USER_PASSWORD);
+    companyToken = login.body.data.accessToken as string;
   });
 
   it('creates company menu assignment', async () => {
     const suffix = Date.now();
     const create = await request(app)
-      .post(`/api/v1/dashboard/menus/${CENTRAL_MENU_ID}/assignments`)
+      .post(`/api/v1/dashboard/menus/${SEED_MENU_ID}/assignments`)
       .set(bearer(dashToken))
       .send({
         scopeType: 'company',
-        scopeId: NILE_COMPANY_ID,
+        scopeId: companyId,
         priority: 10,
         isActive: true,
       });
@@ -34,7 +43,7 @@ describe('Menu assignment cycle', () => {
 
   it('lists only active assignments after soft delete', async () => {
     const listBefore = await request(app)
-      .get(`/api/v1/dashboard/menus/${CENTRAL_MENU_ID}/assignments`)
+      .get(`/api/v1/dashboard/menus/${SEED_MENU_ID}/assignments`)
       .set(bearer(dashToken));
 
     expect(listBefore.status).toBe(200);
@@ -44,13 +53,13 @@ describe('Menu assignment cycle', () => {
     expect(activeBefore.some((a) => a.id === assignmentId)).toBe(true);
 
     const del = await request(app)
-      .delete(`/api/v1/dashboard/menus/${CENTRAL_MENU_ID}/assignments/${assignmentId}`)
+      .delete(`/api/v1/dashboard/menus/${SEED_MENU_ID}/assignments/${assignmentId}`)
       .set(bearer(dashToken));
 
     expect(del.status).toBe(204);
 
     const listAfter = await request(app)
-      .get(`/api/v1/dashboard/menus/${CENTRAL_MENU_ID}/assignments`)
+      .get(`/api/v1/dashboard/menus/${SEED_MENU_ID}/assignments`)
       .set(bearer(dashToken));
 
     expect(listAfter.status).toBe(200);
@@ -59,13 +68,6 @@ describe('Menu assignment cycle', () => {
   });
 
   it('company menu is empty without active assignment', async () => {
-    const login = await request(app)
-      .post('/api/v1/auth/company/login')
-      .send({ email: 'atf343069@gmail.com', password: 'E2eTestPass123!' });
-
-    expect(login.status).toBe(200);
-    const companyToken = login.body.data.accessToken as string;
-
     const menu = await request(app)
       .get('/api/v1/company/catalog/menu')
       .set(bearer(companyToken));
@@ -78,11 +80,11 @@ describe('Menu assignment cycle', () => {
 
     if (!hasProducts) {
       const reassign = await request(app)
-        .post(`/api/v1/dashboard/menus/${CENTRAL_MENU_ID}/assignments`)
+        .post(`/api/v1/dashboard/menus/${SEED_MENU_ID}/assignments`)
         .set(bearer(dashToken))
         .send({
           scopeType: 'company',
-          scopeId: NILE_COMPANY_ID,
+          scopeId: companyId,
           priority: 10,
           isActive: true,
         });
@@ -103,9 +105,9 @@ describe('Menu assignment cycle', () => {
 
 describe('Company orders list', () => {
   it('returns paginated array for company user', async () => {
-    const login = await request(app)
-      .post('/api/v1/auth/company/login')
-      .send({ email: 'atf343069@gmail.com', password: 'E2eTestPass123!' });
+    const suffix = `orders-list-${Date.now()}`;
+    await registerCompany(suffix);
+    const login = await loginCompanyUser(`user-${suffix}@example.com`, COMPANY_USER_PASSWORD);
 
     const token = login.body.data.accessToken as string;
     const res = await request(app).get('/api/v1/company/orders').set(bearer(token));

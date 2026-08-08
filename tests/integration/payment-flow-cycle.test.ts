@@ -48,7 +48,7 @@ describe('Payment proof cycle', () => {
       .send({
         categoryId: category.body.data.id,
         name: `Pay dish ${SUFFIX}`,
-        basePrice: '600.00',
+        basePrice: '1200.00',
         currency: 'EGP',
         visibility: 'public',
       });
