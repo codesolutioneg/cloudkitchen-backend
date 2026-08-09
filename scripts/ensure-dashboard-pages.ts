@@ -27,6 +27,7 @@ async function main() {
     { route: '/dashboard/meal-plans', name: 'Meal Plans', sort_order: 65, icon: 'Salad' },
     { route: '/dashboard/billing', name: 'Billing', sort_order: 67, icon: 'Receipt' },
     { route: '/dashboard/costing', name: 'Costing', sort_order: 68, icon: 'Calculator' },
+    { route: '/dashboard/production', name: 'Production', sort_order: 69, icon: 'ChefHat' },
   ];
 
   for (const spec of pages) {
